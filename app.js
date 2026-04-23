@@ -46,6 +46,15 @@ const els = {
   heroStats: byId("heroStats")
 };
 
+window.forceLogout = function forceLogout() {
+  try {
+    clearAuthStorage();
+  } catch (error) {
+    console.error(error);
+  }
+  window.location.href = "index.html";
+};
+
 bootstrap().catch((error) => {
   console.error(error);
   showStartupError("페이지 초기화 중 오류가 발생했습니다. Supabase 설정과 인터넷 연결을 확인해 주세요.");
@@ -291,8 +300,25 @@ async function handleSignupSubmit(event) {
 }
 
 async function logout() {
-  await supabase.auth.signOut();
+  try {
+    await supabase?.auth?.signOut?.();
+  } catch (error) {
+    console.error(error);
+  }
+  clearAuthStorage();
   window.location.href = "index.html";
+}
+
+function clearAuthStorage() {
+  const keysToRemove = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (key && (key.includes("supabase") || key.includes("sb-"))) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach((key) => localStorage.removeItem(key));
+  sessionStorage.clear();
 }
 
 async function handleRequestSubmit(event) {
@@ -438,7 +464,7 @@ function renderSessionBar() {
   const roleLabel = state.profile.role === "admin" ? "관리자" : "사용자";
   els.sessionBar.innerHTML = `
     <span><strong>${escapeHtml(state.profile.name)}</strong> 님 · ${roleLabel} · ${escapeHtml(state.profile.login_id)}</span>
-    <button type="button" class="ghost-btn session-button" data-action="logout">로그아웃</button>
+    <button type="button" class="ghost-btn session-button" data-action="logout" onclick="window.forceLogout && window.forceLogout()">로그아웃</button>
   `;
   els.sessionBar.querySelector("[data-action='logout']")?.addEventListener("click", logout);
 }
