@@ -120,7 +120,14 @@
 
           <div class="subpanel">
             <h3>현장 배정</h3>
-            <form id="assignmentForm" class="stack-form">
+            <form
+              id="assignmentForm"
+              class="stack-form"
+              method="post"
+              action="#"
+              autocomplete="off"
+              onsubmit="window.directAssignmentSubmit(event); return false;"
+            >
               <label>
                 배정할 요청
                 <select name="requestId" id="assignmentRequestSelect" required></select>
@@ -130,7 +137,7 @@
                 <select name="workerIds" id="assignmentWorkerSelect" multiple required></select>
                 <small>Ctrl 또는 Cmd로 여러 명 선택</small>
               </label>
-              <button type="submit" class="primary-btn">배정 저장</button>
+              <button type="button" class="primary-btn" onclick="window.directAssignmentSubmit(event)">배정 저장</button>
             </form>
             <div class="assignment-list" id="assignmentList"></div>
           </div>
@@ -154,6 +161,7 @@
   <script>
     const requestFormDirect = document.getElementById("requestForm");
     const workerFormDirect = document.getElementById("workerForm");
+    const assignmentFormDirect = document.getElementById("assignmentForm");
     const requestMessage = document.getElementById("authMessage");
 
     function setRequestMessage(message, isError = true) {
@@ -270,6 +278,78 @@
           : '<option value="">인력이 없습니다</option>';
       }
     }
+
+    function renderDirectAssignments(assignments, requests, clients, workers) {
+      const assignmentList = document.getElementById("assignmentList");
+      if (!assignmentList) {
+        return;
+      }
+
+      const requestMap = new Map(requests.map((request) => [request.id, request]));
+      const clientMap = new Map(clients.map((client) => [client.id, client]));
+      const workerMap = new Map(workers.map((worker) => [worker.id, worker]));
+      const grouped = new Map();
+
+      assignments.forEach((assignment) => {
+        if (!grouped.has(assignment.request_id)) {
+          grouped.set(assignment.request_id, []);
+        }
+        grouped.get(assignment.request_id).push(assignment);
+      });
+
+      if (grouped.size === 0) {
+        assignmentList.innerHTML = '<p class="empty">아직 배정된 내역이 없습니다.</p>';
+        return;
+      }
+
+      assignmentList.innerHTML = Array.from(grouped.entries())
+        .map(([requestId, requestAssignments]) => {
+          const request = requestMap.get(requestId);
+          const client = clientMap.get(request?.client_id);
+          const assignedWorkers = requestAssignments
+            .map((assignment) => workerMap.get(assignment.worker_id))
+            .filter(Boolean);
+
+          return `
+            <article class="assignment-card">
+              <div class="assignment-card-header">
+                <h3>${escapeDirectHtml(client?.name || "-")}</h3>
+                <span class="badge">${assignedWorkers.length}/${Number(request?.headcount || 0)}명</span>
+              </div>
+              <p class="assignment-meta">${escapeDirectHtml(request?.site_location || "-")} · ${formatDirectDate(request?.work_date)}</p>
+              <div class="assigned-workers">
+                ${
+                  assignedWorkers.length
+                    ? assignedWorkers
+                        .map((worker) => `<span class="worker-tag">${escapeDirectHtml(worker.name)} · ${escapeDirectHtml(worker.phone || "연락처 없음")}</span>`)
+                        .join("")
+                    : '<span class="worker-tag">배정 인력 정보 없음</span>'
+                }
+              </div>
+            </article>
+          `;
+        })
+        .join("");
+    }
+
+    window.directLoadAssignments = async function directLoadAssignments() {
+      const stored = getStoredSession();
+      if (!stored?.profile?.id || stored.profile.role !== "admin") {
+        return;
+      }
+
+      try {
+        const [clients, requests, workers, assignments] = await Promise.all([
+          supabaseRest("clients?select=*&order=name.asc"),
+          supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc"),
+          supabaseRest("workers?select=*&order=name.asc"),
+          supabaseRest("assignments?select=*&order=created_at.desc")
+        ]);
+        renderDirectAssignments(assignments || [], requests || [], clients || [], workers || []);
+      } catch (error) {
+        setRequestMessage(`배정 내역 불러오기 실패: ${error.message}`);
+      }
+    };
 
     window.directLoadWorkers = async function directLoadWorkers() {
       const stored = getStoredSession();
@@ -414,9 +494,75 @@
       return false;
     };
 
+    window.directAssignmentSubmit = async function directAssignmentSubmit(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+      }
+
+      setRequestMessage("배정 저장 버튼 클릭 확인. 저장하는 중입니다...", false);
+
+      const stored = getStoredSession();
+      if (!stored?.profile?.id || stored.profile.role !== "admin") {
+        setRequestMessage("관리자 로그인 세션이 없습니다. 다시 로그인해 주세요.");
+        return false;
+      }
+
+      const requestId = String(new FormData(assignmentFormDirect).get("requestId") || "").trim();
+      const workerSelect = document.getElementById("assignmentWorkerSelect");
+      const workerIds = Array.from(workerSelect?.selectedOptions || [])
+        .map((option) => option.value)
+        .filter(Boolean);
+
+      if (!requestId || workerIds.length === 0) {
+        setRequestMessage("배정할 요청과 인력을 선택해 주세요.");
+        return false;
+      }
+
+      try {
+        const rows = workerIds.map((workerId) => ({
+          request_id: requestId,
+          worker_id: workerId,
+          created_by: stored.profile.id
+        }));
+
+        await supabaseRest("assignments?on_conflict=request_id,worker_id", {
+          method: "POST",
+          headers: {
+            Prefer: "resolution=merge-duplicates,return=representation"
+          },
+          body: JSON.stringify(rows)
+        });
+
+        const currentAssignments = await supabaseRest(`assignments?select=*&request_id=eq.${requestId}`);
+        await supabaseRest(`job_requests?id=eq.${requestId}`, {
+          method: "PATCH",
+          headers: {
+            Prefer: "return=minimal"
+          },
+          body: JSON.stringify({
+            status: `${currentAssignments.length}명 배정`
+          })
+        });
+
+        assignmentFormDirect.reset();
+        await Promise.all([
+          window.directLoadRequests(),
+          window.directLoadAssignments()
+        ]);
+        setRequestMessage("배정이 저장됐습니다. 하단 배정 내역에 바로 반영됐습니다.", false);
+      } catch (error) {
+        setRequestMessage(`배정 저장 실패: ${error.message}`);
+      }
+
+      return false;
+    };
+
     window.addEventListener("load", () => {
       window.directLoadRequests();
       window.directLoadWorkers();
+      window.directLoadAssignments();
     });
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
