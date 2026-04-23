@@ -273,10 +273,24 @@
       if (workerSelect) {
         workerSelect.innerHTML = workers.length
           ? workers
-              .map((worker) => `<option value="${worker.id}">${escapeDirectHtml(worker.name)} (${escapeDirectHtml(worker.phone || "연락처 없음")})</option>`)
+              .map((worker) => `<option value="${worker.id}" data-name="${escapeDirectHtml(worker.name)}" data-phone="${escapeDirectHtml(worker.phone || "")}">${escapeDirectHtml(worker.name)} (${escapeDirectHtml(worker.phone || "연락처 없음")})</option>`)
               .join("")
           : '<option value="">인력이 없습니다</option>';
       }
+    }
+
+    function normalizeDirectText(value) {
+      return String(value || "").replace(/\s+/g, "").trim();
+    }
+
+    function readSelectedWorkerOption(option) {
+      const text = option.textContent || "";
+      const textMatch = text.match(/^(.*?)\s*\((.*?)\)\s*$/);
+      return {
+        id: option.value,
+        name: option.dataset.name || textMatch?.[1] || text,
+        phone: option.dataset.phone || (textMatch?.[2] === "연락처 없음" ? "" : textMatch?.[2]) || ""
+      };
     }
 
     function renderDirectAssignments(assignments, requests, clients, workers) {
@@ -511,11 +525,9 @@
 
       const requestId = String(new FormData(assignmentFormDirect).get("requestId") || "").trim();
       const workerSelect = document.getElementById("assignmentWorkerSelect");
-      const workerIds = Array.from(workerSelect?.selectedOptions || [])
-        .map((option) => option.value)
-        .filter(Boolean);
+      const selectedWorkerOptions = Array.from(workerSelect?.selectedOptions || []).map(readSelectedWorkerOption);
 
-      if (!requestId || workerIds.length === 0) {
+      if (!requestId || selectedWorkerOptions.length === 0) {
         setRequestMessage("배정할 요청과 인력을 선택해 주세요.");
         return false;
       }
@@ -527,7 +539,21 @@
         ]);
         const validRequestIds = new Set((currentRequests || []).map((request) => request.id));
         const validWorkerIds = new Set((currentWorkers || []).map((worker) => worker.id));
-        const invalidWorkerIds = workerIds.filter((workerId) => !validWorkerIds.has(workerId));
+        const resolvedWorkerIds = selectedWorkerOptions
+          .map((selected) => {
+            if (validWorkerIds.has(selected.id)) {
+              return selected.id;
+            }
+
+            const matchedWorker = (currentWorkers || []).find(
+              (worker) =>
+                normalizeDirectText(worker.name) === normalizeDirectText(selected.name)
+                && normalizeDirectText(worker.phone) === normalizeDirectText(selected.phone)
+            );
+            return matchedWorker?.id || "";
+          })
+          .filter(Boolean);
+        const uniqueWorkerIds = [...new Set(resolvedWorkerIds)];
 
         if (!validRequestIds.has(requestId)) {
           await window.directLoadRequests();
@@ -535,13 +561,13 @@
           return false;
         }
 
-        if (invalidWorkerIds.length > 0) {
+        if (uniqueWorkerIds.length !== selectedWorkerOptions.length) {
           renderDirectWorkers(currentWorkers || []);
-          setRequestMessage("선택한 인력 중 DB에 없는 인력이 있습니다. 인력 목록을 새로 불러왔으니 다시 선택해 주세요.");
+          setRequestMessage("선택한 인력을 DB의 최신 인력 목록과 연결하지 못했습니다. 인력 목록을 새로 불러왔으니 다시 선택해 주세요.");
           return false;
         }
 
-        const rows = workerIds.map((workerId) => ({
+        const rows = uniqueWorkerIds.map((workerId) => ({
           request_id: requestId,
           worker_id: workerId,
           created_by: stored.profile.id
@@ -573,6 +599,11 @@
         ]);
         setRequestMessage("배정이 저장됐습니다. 하단 배정 내역에 바로 반영됐습니다.", false);
       } catch (error) {
+        if (error.message.includes("assignments_worker_id_fkey")) {
+          await window.directLoadWorkers();
+          setRequestMessage("선택한 인력 ID가 DB와 맞지 않아 인력 목록을 새로 불러왔습니다. 다시 선택해서 저장해 주세요.");
+          return false;
+        }
         setRequestMessage(`배정 저장 실패: ${error.message}`);
       }
 
