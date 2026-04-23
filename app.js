@@ -316,8 +316,7 @@ async function handleWorkerSubmit(event) {
   const data = new FormData(event.currentTarget);
   const { error } = await supabase.from("workers").insert({
     name: String(data.get("name") || "").trim(),
-    phone: String(data.get("phone") || "").trim(),
-    skill: String(data.get("skill") || "").trim()
+    phone: String(data.get("phone") || "").trim()
   });
   if (error) {
     setAuthMessage("인력 등록에 실패했습니다.");
@@ -468,7 +467,7 @@ function renderWorkers() {
     state.workers.length === 0
       ? `<p class="empty">등록된 인력이 없습니다.</p>`
       : state.workers
-          .map((worker) => `<span class="chip">${escapeHtml(worker.name)} · ${escapeHtml(worker.skill || "일반")}</span>`)
+          .map((worker) => `<span class="chip">${escapeHtml(worker.name)} · ${escapeHtml(worker.phone || "연락처 없음")}</span>`)
           .join("");
 }
 
@@ -486,7 +485,7 @@ function renderAssignmentOptions() {
 
   els.assignmentWorkerSelect.innerHTML =
     state.workers
-      .map((worker) => `<option value="${worker.id}">${worker.name} (${worker.skill || "일반"})</option>`)
+      .map((worker) => `<option value="${worker.id}">${worker.name} (${worker.phone || "연락처 없음"})</option>`)
       .join("") || `<option value="">인력이 없습니다</option>`;
 }
 
@@ -510,7 +509,7 @@ function renderAssignments() {
       fragment.querySelector(".badge").textContent = `${assignedWorkers.length}/${request.headcount}명`;
       fragment.querySelector(".assignment-meta").textContent = `${request.site_location} · ${formatDate(request.work_date)}`;
       fragment.querySelector(".assigned-workers").innerHTML = assignedWorkers
-        .map((worker) => `<span class="worker-tag">${escapeHtml(worker.name)} · ${escapeHtml(worker.skill || "일반")}</span>`)
+        .map((worker) => `<span class="worker-tag">${escapeHtml(worker.name)} · ${escapeHtml(worker.phone || "연락처 없음")}</span>`)
         .join("");
       return fragment.firstElementChild.outerHTML;
     })
