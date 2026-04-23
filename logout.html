@@ -18,7 +18,7 @@
       const localKeys = [];
       for (let index = 0; index < localStorage.length; index += 1) {
         const key = localStorage.key(index);
-        if (key && (key.includes("supabase") || key.includes("sb-"))) {
+        if (key && (key.includes("supabase") || key.includes("sb-") || key.includes("workforce"))) {
           localKeys.push(key);
         }
       }

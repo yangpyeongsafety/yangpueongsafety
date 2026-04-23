@@ -91,7 +91,35 @@ function showStartupError(message) {
 async function hydrateSession() {
   const { data } = await supabase.auth.getSession();
   state.session = data.session;
-  state.profile = state.session ? await fetchMyProfile() : null;
+  if (state.session) {
+    state.profile = await fetchMyProfile();
+    return;
+  }
+
+  const fallback = loadFallbackSession();
+  state.session = fallback?.auth ? { user: fallback.auth.user, access_token: fallback.auth.access_token } : null;
+  state.profile = fallback?.profile || null;
+}
+
+function loadFallbackSession() {
+  try {
+    const raw = localStorage.getItem("workforce.session");
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed?.auth?.access_token || !parsed?.profile) {
+      return null;
+    }
+    if (parsed.auth.expires_at && parsed.auth.expires_at < Math.floor(Date.now() / 1000)) {
+      localStorage.removeItem("workforce.session");
+      return null;
+    }
+    return parsed;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
 }
 
 async function fetchMyProfile() {
@@ -313,7 +341,7 @@ function clearAuthStorage() {
   const keysToRemove = [];
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (key && (key.includes("supabase") || key.includes("sb-"))) {
+    if (key && (key.includes("supabase") || key.includes("sb-") || key.includes("workforce"))) {
       keysToRemove.push(key);
     }
   }

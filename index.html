@@ -17,7 +17,7 @@
     <div class="session-bar" id="sessionBar">
       <span>로그인 페이지입니다.</span>
       <span class="session-actions">
-        <a class="session-link" href="main.html">메인</a>
+        <a class="session-link" href="index.html">메인</a>
         <a class="session-link" href="signup.html">회원가입</a>
       </span>
     </div>
@@ -143,7 +143,19 @@
           return false;
         }
 
-        localStorage.setItem("supabase.auth.token", JSON.stringify(result));
+        const authPayload = {
+          access_token: result.access_token,
+          refresh_token: result.refresh_token,
+          expires_in: result.expires_in,
+          expires_at: Math.floor(Date.now() / 1000) + Number(result.expires_in || 0),
+          token_type: result.token_type,
+          user: result.user
+        };
+        localStorage.setItem("workforce.session", JSON.stringify({
+          profile,
+          auth: authPayload
+        }));
+        localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify(authPayload));
         setLoginMessage("로그인 성공. 페이지를 이동합니다.", false);
         window.location.href = role === "admin" ? "main.html" : "worker-entry.html";
       } catch (error) {
