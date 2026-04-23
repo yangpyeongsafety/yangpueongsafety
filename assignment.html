@@ -324,6 +324,7 @@
     function renderDirectWorkers(workers) {
       const chips = document.getElementById("workerChips");
       const workerSelect = document.getElementById("assignmentWorkerSelect");
+      window.latestDirectWorkers = workers || [];
 
       if (chips) {
         chips.innerHTML = workers.length
@@ -351,9 +352,24 @@
       const textMatch = text.match(/^(.*?)\s*\((.*?)\)\s*$/);
       return {
         id: option.value,
+        index: option.index,
         name: option.dataset.name || textMatch?.[1] || text,
         phone: option.dataset.phone || (textMatch?.[2] === "연락처 없음" ? "" : textMatch?.[2]) || ""
       };
+    }
+
+    function resolveWorkerIdFromFreshList(selected, workers) {
+      const matchedByNameAndPhone = (workers || []).find(
+        (worker) =>
+          normalizeDirectText(worker.name) === normalizeDirectText(selected.name)
+          && normalizeDirectText(worker.phone) === normalizeDirectText(selected.phone)
+      );
+      if (matchedByNameAndPhone?.id) {
+        return matchedByNameAndPhone.id;
+      }
+
+      const matchedByIndex = Number.isInteger(selected.index) ? workers?.[selected.index] : null;
+      return matchedByIndex?.id || "";
     }
 
     function renderDirectAssignments(assignments, requests, clients, workers) {
@@ -602,14 +618,7 @@
         ]);
         const validRequestIds = new Set((currentRequests || []).map((request) => request.id));
         const resolvedWorkerIds = selectedWorkerOptions
-          .map((selected) => {
-            const matchedWorker = (currentWorkers || []).find(
-              (worker) =>
-                normalizeDirectText(worker.name) === normalizeDirectText(selected.name)
-                && normalizeDirectText(worker.phone) === normalizeDirectText(selected.phone)
-            );
-            return matchedWorker?.id || selected.id || "";
-          })
+          .map((selected) => resolveWorkerIdFromFreshList(selected, currentWorkers || []))
           .filter(Boolean);
         const uniqueWorkerIds = [...new Set(resolvedWorkerIds)];
 
@@ -661,14 +670,7 @@
           try {
             const freshWorkers = await supabaseRest("workers?select=id,name,phone&order=name.asc");
             const retryWorkerIds = selectedWorkerOptions
-              .map((selected) => {
-                const matchedWorker = (freshWorkers || []).find(
-                  (worker) =>
-                    normalizeDirectText(worker.name) === normalizeDirectText(selected.name)
-                    && normalizeDirectText(worker.phone) === normalizeDirectText(selected.phone)
-                );
-                return matchedWorker?.id || "";
-              })
+              .map((selected) => resolveWorkerIdFromFreshList(selected, freshWorkers || []))
               .filter(Boolean);
             const uniqueRetryWorkerIds = [...new Set(retryWorkerIds)];
 
