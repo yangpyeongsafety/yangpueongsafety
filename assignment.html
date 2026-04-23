@@ -134,8 +134,9 @@
               </label>
               <label>
                 배정 인력
-                <select name="workerIds" id="assignmentWorkerSelect" multiple required></select>
-                <small>Ctrl 또는 Cmd로 여러 명 선택</small>
+                <select name="workerIds" id="assignmentWorkerSelect" multiple></select>
+                <div class="direct-worker-picker" id="directWorkerPicker"></div>
+                <small>아래 체크박스에서 배정할 인력을 선택하세요.</small>
               </label>
               <button type="button" class="primary-btn" onclick="window.directAssignmentSubmit(event)">배정 저장</button>
             </form>
@@ -324,6 +325,7 @@
     function renderDirectWorkers(workers) {
       const chips = document.getElementById("workerChips");
       const workerSelect = document.getElementById("assignmentWorkerSelect");
+      const workerPicker = document.getElementById("directWorkerPicker");
       window.latestDirectWorkers = workers || [];
 
       if (chips) {
@@ -340,6 +342,19 @@
               .map((worker) => `<option value="${worker.id}" data-name="${escapeDirectHtml(worker.name)}" data-phone="${escapeDirectHtml(worker.phone || "")}">${escapeDirectHtml(worker.name)} (${escapeDirectHtml(worker.phone || "연락처 없음")})</option>`)
               .join("")
           : '<option value="">인력이 없습니다</option>';
+      }
+
+      if (workerPicker) {
+        workerPicker.innerHTML = workers.length
+          ? workers
+              .map((worker) => `
+                <label class="direct-worker-option">
+                  <input type="checkbox" name="directWorkerIds" value="${escapeDirectHtml(worker.id)}" />
+                  <span>${escapeDirectHtml(worker.name)} (${escapeDirectHtml(worker.phone || "연락처 없음")})</span>
+                </label>
+              `)
+              .join("")
+          : '<p class="empty">등록된 인력이 없습니다.</p>';
       }
     }
 
@@ -604,9 +619,12 @@
 
       const requestId = String(new FormData(assignmentFormDirect).get("requestId") || "").trim();
       const workerSelect = document.getElementById("assignmentWorkerSelect");
+      const checkedWorkerIds = Array.from(document.querySelectorAll("#directWorkerPicker input[name='directWorkerIds']:checked"))
+        .map((input) => input.value)
+        .filter(Boolean);
       const selectedWorkerOptions = Array.from(workerSelect?.selectedOptions || []).map(readSelectedWorkerOption);
 
-      if (!requestId || selectedWorkerOptions.length === 0) {
+      if (!requestId || (checkedWorkerIds.length === 0 && selectedWorkerOptions.length === 0)) {
         setRequestMessage("배정할 요청과 인력을 선택해 주세요.");
         return false;
       }
@@ -617,9 +635,12 @@
           supabaseRest("workers?select=id,name,phone&order=name.asc")
         ]);
         const validRequestIds = new Set((currentRequests || []).map((request) => request.id));
-        const resolvedWorkerIds = selectedWorkerOptions
-          .map((selected) => resolveWorkerIdFromFreshList(selected, currentWorkers || []))
-          .filter(Boolean);
+        const currentWorkerIds = new Set((currentWorkers || []).map((worker) => worker.id));
+        const resolvedWorkerIds = checkedWorkerIds.length > 0
+          ? checkedWorkerIds.filter((workerId) => currentWorkerIds.has(workerId))
+          : selectedWorkerOptions
+              .map((selected) => resolveWorkerIdFromFreshList(selected, currentWorkers || []))
+              .filter(Boolean);
         const uniqueWorkerIds = [...new Set(resolvedWorkerIds)];
 
         if (!validRequestIds.has(requestId)) {
@@ -628,9 +649,10 @@
           return false;
         }
 
-        if (uniqueWorkerIds.length !== selectedWorkerOptions.length) {
+        const expectedWorkerCount = checkedWorkerIds.length || selectedWorkerOptions.length;
+        if (uniqueWorkerIds.length !== expectedWorkerCount) {
           renderDirectWorkers(currentWorkers || []);
-          setRequestMessage("선택한 인력을 DB의 최신 인력 목록과 연결하지 못했습니다. 인력 목록을 새로 불러왔으니 다시 선택해 주세요.");
+          setRequestMessage("선택한 인력을 DB의 최신 인력 목록과 연결하지 못했습니다. 새로 표시된 체크박스에서 다시 선택해 주세요.");
           return false;
         }
 

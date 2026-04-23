@@ -322,6 +322,34 @@ button:hover {
   font-weight: 600;
 }
 
+.direct-worker-picker {
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+#assignmentWorkerSelect {
+  display: none;
+}
+
+.direct-worker-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.direct-worker-option input {
+  width: auto;
+  accent-color: var(--accent);
+}
+
 .table-wrap {
   overflow-x: auto;
 }
