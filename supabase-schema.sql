@@ -7,6 +7,10 @@ create table if not exists public.workers (
   created_at timestamptz not null default now()
 );
 
+alter table public.workers
+  add column if not exists phone text,
+  add column if not exists created_at timestamptz not null default now();
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   login_id text not null unique,
@@ -17,12 +21,29 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+alter table public.profiles
+  add column if not exists login_id text,
+  add column if not exists role text,
+  add column if not exists name text,
+  add column if not exists phone text,
+  add column if not exists worker_id uuid references public.workers(id) on delete set null,
+  add column if not exists created_at timestamptz not null default now();
+
+create unique index if not exists profiles_login_id_key on public.profiles (login_id);
+
 create table if not exists public.clients (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
   created_by uuid references public.profiles(id),
   created_at timestamptz not null default now()
 );
+
+alter table public.clients
+  add column if not exists name text,
+  add column if not exists created_by uuid references public.profiles(id),
+  add column if not exists created_at timestamptz not null default now();
+
+create unique index if not exists clients_name_key on public.clients (name);
 
 create table if not exists public.job_requests (
   id uuid primary key default gen_random_uuid(),
@@ -37,6 +58,17 @@ create table if not exists public.job_requests (
   created_at timestamptz not null default now()
 );
 
+alter table public.job_requests
+  add column if not exists client_id uuid references public.clients(id) on delete cascade,
+  add column if not exists contact_method text,
+  add column if not exists headcount integer,
+  add column if not exists site_location text,
+  add column if not exists work_date date,
+  add column if not exists notes text,
+  add column if not exists status text not null default 'pending',
+  add column if not exists created_by uuid references public.profiles(id),
+  add column if not exists created_at timestamptz not null default now();
+
 create table if not exists public.assignments (
   id uuid primary key default gen_random_uuid(),
   request_id uuid not null references public.job_requests(id) on delete cascade,
@@ -45,6 +77,15 @@ create table if not exists public.assignments (
   created_at timestamptz not null default now(),
   unique (request_id, worker_id)
 );
+
+alter table public.assignments
+  add column if not exists request_id uuid references public.job_requests(id) on delete cascade,
+  add column if not exists worker_id uuid references public.workers(id) on delete cascade,
+  add column if not exists created_by uuid references public.profiles(id),
+  add column if not exists created_at timestamptz not null default now();
+
+create unique index if not exists assignments_request_worker_key
+on public.assignments (request_id, worker_id);
 
 create table if not exists public.work_logs (
   id uuid primary key default gen_random_uuid(),
@@ -57,6 +98,19 @@ create table if not exists public.work_logs (
   labor_units numeric(4,1) not null default 0,
   updated_at timestamptz not null default now()
 );
+
+alter table public.work_logs
+  add column if not exists assignment_id uuid references public.assignments(id) on delete cascade,
+  add column if not exists worker_id uuid references public.workers(id) on delete cascade,
+  add column if not exists start_time timestamptz,
+  add column if not exists end_time timestamptz,
+  add column if not exists break_minutes integer not null default 0,
+  add column if not exists work_hours numeric(4,1) not null default 0,
+  add column if not exists labor_units numeric(4,1) not null default 0,
+  add column if not exists updated_at timestamptz not null default now();
+
+create unique index if not exists work_logs_assignment_id_key
+on public.work_logs (assignment_id);
 
 create or replace function public.handle_updated_at()
 returns trigger
