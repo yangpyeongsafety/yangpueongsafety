@@ -311,7 +311,6 @@ async function handleRequestSubmit(event) {
     headcount: Number(data.get("headcount")),
     site_location: String(data.get("siteLocation") || "").trim(),
     work_date: String(data.get("workDate") || ""),
-    notes: String(data.get("notes") || "").trim(),
     status: "대기",
     created_by: state.profile.id
   });
