@@ -56,12 +56,14 @@ async function bootstrap() {
     showStartupError("Supabase 스크립트를 불러오지 못했습니다. 인터넷 연결 또는 supabase-config.js를 확인해 주세요.");
     return;
   }
+  bindEvents();
+  syncAuthFields();
+  renderSessionBar();
   await hydrateSession();
   const allowed = await enforceAccess();
   if (!allowed) {
     return;
   }
-  bindEvents();
   await renderAll();
 }
 
