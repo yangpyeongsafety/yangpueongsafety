@@ -287,6 +287,8 @@
       const table = document.getElementById("requestsTable");
       const requestSelect = document.getElementById("assignmentRequestSelect");
       const clientMap = new Map(clients.map((client) => [client.id, client]));
+      window.latestDirectRequests = requests || [];
+      window.latestDirectClients = clients || [];
 
       if (table) {
         if (requests.length === 0) {
@@ -440,6 +442,46 @@
         .join("");
     }
 
+    function renderSavedAssignmentsOnly(assignments, requestId, workerIds) {
+      const assignmentList = document.getElementById("assignmentList");
+      if (!assignmentList) {
+        return;
+      }
+
+      const requests = window.latestDirectRequests || [];
+      const clients = window.latestDirectClients || [];
+      const workers = window.latestDirectWorkers || [];
+      const request = requests.find((item) => item.id === requestId);
+      const client = clients.find((item) => item.id === request?.client_id);
+      const selectedWorkers = workers.filter((worker) => workerIds.includes(worker.id));
+      const savedAssignments = assignments?.length
+        ? assignments
+        : workerIds.map((workerId) => ({ request_id: requestId, worker_id: workerId }));
+
+      renderDirectAssignments(savedAssignments, requests, clients, workers);
+
+      if (assignmentList.textContent.includes("아직 배정된 내역이 없습니다")) {
+        assignmentList.innerHTML = `
+          <article class="assignment-card">
+            <div class="assignment-card-header">
+              <h3>${escapeDirectHtml(client?.name || "-")}</h3>
+              <span class="badge">${selectedWorkers.length}/${Number(request?.headcount || 0)}명</span>
+            </div>
+            <p class="assignment-meta">${escapeDirectHtml(request?.site_location || "-")} · ${formatDirectDate(request?.work_date)}</p>
+            <div class="assigned-workers">
+              ${
+                selectedWorkers.length
+                  ? selectedWorkers
+                      .map((worker) => `<span class="worker-tag">${escapeDirectHtml(worker.name)} · ${escapeDirectHtml(worker.phone || "연락처 없음")}</span>`)
+                      .join("")
+                  : '<span class="worker-tag">저장된 인력</span>'
+              }
+            </div>
+          </article>
+        `;
+      }
+    }
+
     window.directLoadAssignments = async function directLoadAssignments() {
       const stored = getStoredSession();
       if (!stored?.profile?.id || stored.profile.role !== "admin") {
@@ -453,9 +495,15 @@
           supabaseRest("workers?select=*&order=name.asc"),
           supabaseRest("assignments?select=*&order=created_at.desc")
         ]);
+        const assignmentList = document.getElementById("assignmentList");
+        if ((!assignments || assignments.length === 0) && assignmentList?.querySelector(".assignment-card")) {
+          return [];
+        }
         renderDirectAssignments(assignments || [], requests || [], clients || [], workers || []);
+        return assignments || [];
       } catch (error) {
         setRequestMessage(`배정 내역 불러오기 실패: ${error.message}`);
+        return [];
       }
     };
 
@@ -662,7 +710,7 @@
           created_by: stored.profile.id
         }));
 
-        await supabaseRest("assignments?on_conflict=request_id,worker_id", {
+        const insertedAssignments = await supabaseRest("assignments?on_conflict=request_id,worker_id", {
           method: "POST",
           headers: {
             Prefer: "resolution=merge-duplicates,return=representation"
@@ -682,10 +730,17 @@
         });
 
         assignmentFormDirect.reset();
-        await Promise.all([
-          window.directLoadRequests(),
-          window.directLoadAssignments()
+        const [clients, requests, workers, loadedAssignments] = await Promise.all([
+          supabaseRest("clients?select=*&order=name.asc"),
+          supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc"),
+          supabaseRest("workers?select=*&order=name.asc"),
+          supabaseRest("assignments?select=*&order=created_at.desc")
         ]);
+        const visibleAssignments = loadedAssignments?.length ? loadedAssignments : insertedAssignments;
+        renderDirectRequests(requests || [], clients || []);
+        renderDirectWorkers(workers || []);
+        renderDirectAssignments(visibleAssignments || [], requests || [], clients || [], workers || []);
+        renderSavedAssignmentsOnly(visibleAssignments || [], requestId, uniqueWorkerIds);
         setRequestMessage("배정이 저장됐습니다. 하단 배정 내역에 바로 반영됐습니다.", false);
       } catch (error) {
         if (error.message.includes("assignments_worker_id_fkey")) {
@@ -697,7 +752,7 @@
             const uniqueRetryWorkerIds = [...new Set(retryWorkerIds)];
 
             if (uniqueRetryWorkerIds.length === selectedWorkerOptions.length) {
-              await supabaseRest("assignments?on_conflict=request_id,worker_id", {
+              const retryInsertedAssignments = await supabaseRest("assignments?on_conflict=request_id,worker_id", {
                 method: "POST",
                 headers: {
                   Prefer: "resolution=merge-duplicates,return=representation"
@@ -710,11 +765,17 @@
               });
 
               assignmentFormDirect.reset();
-              await Promise.all([
-                window.directLoadRequests(),
-                window.directLoadWorkers(),
-                window.directLoadAssignments()
+              const [clients, requests, workers, loadedAssignments] = await Promise.all([
+                supabaseRest("clients?select=*&order=name.asc"),
+                supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc"),
+                supabaseRest("workers?select=*&order=name.asc"),
+                supabaseRest("assignments?select=*&order=created_at.desc")
               ]);
+              const visibleAssignments = loadedAssignments?.length ? loadedAssignments : retryInsertedAssignments;
+              renderDirectRequests(requests || [], clients || []);
+              renderDirectWorkers(workers || []);
+              renderDirectAssignments(visibleAssignments || [], requests || [], clients || [], workers || []);
+              renderSavedAssignmentsOnly(visibleAssignments || [], requestId, uniqueRetryWorkerIds);
               setRequestMessage("배정이 저장됐습니다. 오래된 인력 ID는 최신 DB 인력으로 자동 연결했습니다.", false);
               return false;
             }
