@@ -419,12 +419,13 @@
           const assignedWorkers = requestAssignments
             .map((assignment) => workerMap.get(assignment.worker_id))
             .filter(Boolean);
+          const assignedCount = requestAssignments.length;
 
           return `
             <article class="assignment-card">
               <div class="assignment-card-header">
                 <h3>${escapeDirectHtml(client?.name || "-")}</h3>
-                <span class="badge">${assignedWorkers.length}/${Number(request?.headcount || 0)}명</span>
+                <span class="badge">${assignedCount}/${Number(request?.headcount || 0)}명</span>
               </div>
               <p class="assignment-meta">${escapeDirectHtml(request?.site_location || "-")} · ${formatDirectDate(request?.work_date)}</p>
               <div class="assigned-workers">
@@ -433,7 +434,9 @@
                     ? assignedWorkers
                         .map((worker) => `<span class="worker-tag">${escapeDirectHtml(worker.name)} · ${escapeDirectHtml(worker.phone || "연락처 없음")}</span>`)
                         .join("")
-                    : '<span class="worker-tag">배정 인력 정보 없음</span>'
+                    : requestAssignments
+                        .map((assignment) => `<span class="worker-tag">배정 완료 · ${escapeDirectHtml(String(assignment.worker_id || "").slice(0, 8))}</span>`)
+                        .join("")
                 }
               </div>
             </article>
@@ -454,6 +457,7 @@
       const request = requests.find((item) => item.id === requestId);
       const client = clients.find((item) => item.id === request?.client_id);
       const selectedWorkers = workers.filter((worker) => workerIds.includes(worker.id));
+      const assignedCount = Math.max(workerIds.length, assignments?.length || 0);
       const savedAssignments = assignments?.length
         ? assignments
         : workerIds.map((workerId) => ({ request_id: requestId, worker_id: workerId }));
@@ -465,7 +469,7 @@
           <article class="assignment-card">
             <div class="assignment-card-header">
               <h3>${escapeDirectHtml(client?.name || "-")}</h3>
-              <span class="badge">${selectedWorkers.length}/${Number(request?.headcount || 0)}명</span>
+              <span class="badge">${assignedCount}/${Number(request?.headcount || 0)}명</span>
             </div>
             <p class="assignment-meta">${escapeDirectHtml(request?.site_location || "-")} · ${formatDirectDate(request?.work_date)}</p>
             <div class="assigned-workers">
