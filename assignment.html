@@ -521,6 +521,26 @@
       }
 
       try {
+        const [currentRequests, currentWorkers] = await Promise.all([
+          supabaseRest("job_requests?select=id"),
+          supabaseRest("workers?select=id,name,phone&order=name.asc")
+        ]);
+        const validRequestIds = new Set((currentRequests || []).map((request) => request.id));
+        const validWorkerIds = new Set((currentWorkers || []).map((worker) => worker.id));
+        const invalidWorkerIds = workerIds.filter((workerId) => !validWorkerIds.has(workerId));
+
+        if (!validRequestIds.has(requestId)) {
+          await window.directLoadRequests();
+          setRequestMessage("선택한 요청이 DB에 없습니다. 요청 목록을 새로 불러왔으니 다시 선택해 주세요.");
+          return false;
+        }
+
+        if (invalidWorkerIds.length > 0) {
+          renderDirectWorkers(currentWorkers || []);
+          setRequestMessage("선택한 인력 중 DB에 없는 인력이 있습니다. 인력 목록을 새로 불러왔으니 다시 선택해 주세요.");
+          return false;
+        }
+
         const rows = workerIds.map((workerId) => ({
           request_id: requestId,
           worker_id: workerId,
