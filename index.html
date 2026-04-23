@@ -14,17 +14,27 @@
 </head>
 <body data-page="login" data-role="public">
   <div class="app-shell">
-    <div class="session-bar" id="sessionBar"></div>
+    <div class="session-bar" id="sessionBar">
+      <span>로그인 페이지입니다.</span>
+      <a class="session-link" href="signup.html">회원가입</a>
+    </div>
     <header class="hero auth-hero">
       <div>
         <p class="eyebrow">LOGIN</p>
-        <h1 id="userGateName">역할별 로그인</h1>
-        <p class="hero-copy" id="authHint">관리자 또는 사용자 계정으로 로그인하세요.</p>
+        <h1>로그인</h1>
+        <p class="hero-copy">관리자 또는 사용자 계정으로 로그인하세요.</p>
       </div>
     </header>
     <main class="dashboard">
       <section class="panel auth-panel auth-single-panel">
-        <form id="loginForm" class="subpanel stack-form" method="post" action="javascript:void(0)" autocomplete="off">
+        <form
+          id="loginForm"
+          class="subpanel stack-form"
+          method="post"
+          action="#"
+          autocomplete="off"
+          onsubmit="window.directLogin(event); return false;"
+        >
           <h2>로그인</h2>
           <label>
             권한
@@ -41,15 +51,106 @@
             비밀번호
             <input type="password" name="password" required />
           </label>
-          <button type="submit" class="primary-btn">로그인</button>
+          <button type="button" class="primary-btn" onclick="window.directLogin(event)">로그인</button>
           <p class="auth-switch">처음이시면 <a href="signup.html">회원가입</a>으로 이동하세요.</p>
         </form>
-        <p id="authMessage" class="auth-message"></p>
+        <p id="authMessage" class="auth-message">로그인 준비 중입니다...</p>
       </section>
     </main>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <script src="supabase-config.js"></script>
-  <script src="app.js?v=20260423-1"></script>
+  <script>
+    const loginForm = document.getElementById("loginForm");
+    const authMessage = document.getElementById("authMessage");
+
+    function setLoginMessage(message, isError = true) {
+      authMessage.textContent = message;
+      authMessage.className = isError ? "auth-message error" : "auth-message success";
+    }
+
+    function loginEmail(loginId) {
+      const safeId = String(loginId)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]/g, "_");
+      return `${safeId}@yangpyeongsafety.app`;
+    }
+
+    window.directLogin = async function directLogin(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      setLoginMessage("버튼 클릭 확인. 로그인을 처리 중입니다...", false);
+
+      if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+        setLoginMessage("Supabase 설정을 불러오지 못했습니다. supabase-config.js를 확인해 주세요.");
+        return false;
+      }
+
+      const formData = new FormData(loginForm);
+      const role = formData.get("role");
+      const loginId = String(formData.get("loginId") || "").trim();
+      const password = String(formData.get("password") || "").trim();
+
+      if (!loginId || !password) {
+        setLoginMessage("아이디와 비밀번호를 입력해 주세요.");
+        return false;
+      }
+
+      try {
+        const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: window.SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${window.SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            email: loginEmail(loginId),
+            password
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          setLoginMessage(`로그인 실패: ${result.error_description || result.msg || result.message || "아이디 또는 비밀번호를 확인해 주세요."}`);
+          return false;
+        }
+
+        const profileResponse = await fetch(`${window.SUPABASE_URL}/rest/v1/profiles?id=eq.${result.user.id}&select=*`, {
+          headers: {
+            apikey: window.SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${result.access_token}`
+          }
+        });
+        const profiles = await profileResponse.json();
+        const profile = profiles[0];
+
+        if (!profile) {
+          setLoginMessage("로그인은 됐지만 사용자 프로필을 찾지 못했습니다. Supabase profiles 테이블을 확인해 주세요.");
+          return false;
+        }
+
+        if (profile.role !== role) {
+          setLoginMessage("선택한 권한과 가입된 권한이 다릅니다.");
+          return false;
+        }
+
+        localStorage.setItem("supabase.auth.token", JSON.stringify(result));
+        setLoginMessage("로그인 성공. 페이지를 이동합니다.", false);
+        window.location.href = role === "admin" ? "main.html" : "worker-entry.html";
+      } catch (error) {
+        setLoginMessage(`로그인 요청 실패: ${error.message}`);
+      }
+
+      return false;
+    };
+
+    setLoginMessage("로그인 준비 완료. 아이디와 비밀번호를 입력해 주세요.", false);
+  </script>
 </body>
 </html>
