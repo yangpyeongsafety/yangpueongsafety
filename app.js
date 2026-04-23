@@ -351,8 +351,13 @@ function clearAuthStorage() {
 
 async function handleRequestSubmit(event) {
   event.preventDefault();
+  setAuthMessage("요청을 저장하는 중입니다.", false);
   const data = new FormData(event.currentTarget);
   const clientName = String(data.get("clientName") || "").trim();
+  if (!clientName) {
+    setAuthMessage("거래처명을 입력해 주세요.");
+    return;
+  }
   const clientId = await getOrCreateClient(clientName);
   if (!clientId) {
     setAuthMessage("거래처 저장에 실패했습니다.");
@@ -370,12 +375,14 @@ async function handleRequestSubmit(event) {
   });
 
   if (error) {
-    setAuthMessage("인력 의뢰 저장에 실패했습니다.");
+    console.error(error);
+    setAuthMessage(`인력 의뢰 저장에 실패했습니다: ${error.message}`);
     return;
   }
 
   event.currentTarget.reset();
   await renderAll();
+  setAuthMessage("요청이 등록됐습니다.", false);
 }
 
 async function getOrCreateClient(name) {
