@@ -1,7 +1,7 @@
 const pageRole = document.body.dataset.role || "public";
 const currentPage = document.body.dataset.page || "main";
 
-const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+const supabase = window.supabase?.createClient?.(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 const state = {
   session: null,
@@ -46,9 +46,16 @@ const els = {
   heroStats: byId("heroStats")
 };
 
-bootstrap();
+bootstrap().catch((error) => {
+  console.error(error);
+  showStartupError("페이지 초기화 중 오류가 발생했습니다. Supabase 설정과 인터넷 연결을 확인해 주세요.");
+});
 
 async function bootstrap() {
+  if (!supabase) {
+    showStartupError("Supabase 스크립트를 불러오지 못했습니다. 인터넷 연결 또는 supabase-config.js를 확인해 주세요.");
+    return;
+  }
   await hydrateSession();
   const allowed = await enforceAccess();
   if (!allowed) {
@@ -60,6 +67,14 @@ async function bootstrap() {
 
 function byId(id) {
   return document.getElementById(id);
+}
+
+function showStartupError(message) {
+  const messageEl = document.getElementById("authMessage");
+  if (messageEl) {
+    messageEl.textContent = message;
+    messageEl.className = "auth-message error";
+  }
 }
 
 async function hydrateSession() {
@@ -234,27 +249,35 @@ async function handleSignupSubmit(event) {
     return;
   }
 
-  const { error } = await supabase.auth.signUp({
-    email: toAuthEmail(loginId),
-    password,
-    options: {
-      data: {
-        login_id: loginId,
-        role,
-        name,
-        phone
+  setAuthMessage("회원가입을 처리 중입니다. 잠시만 기다려 주세요.", false);
+
+  try {
+    const { error } = await supabase.auth.signUp({
+      email: toAuthEmail(loginId),
+      password,
+      options: {
+        data: {
+          login_id: loginId,
+          role,
+          name,
+          phone
+        }
       }
+    });
+
+    if (error) {
+      console.error(error);
+      setAuthMessage(`회원가입 실패: ${translateSupabaseError(error.message)}`);
+      return;
     }
-  });
 
-  if (error) {
-    setAuthMessage(error.message.includes("already") ? "이미 사용 중인 아이디입니다." : "회원가입에 실패했습니다.");
-    return;
+    event.currentTarget.reset();
+    syncAuthFields();
+    setAuthMessage("회원가입이 완료됐습니다. 이제 로그인해 주세요.", false);
+  } catch (error) {
+    console.error(error);
+    setAuthMessage("회원가입 요청을 보내지 못했습니다. 인터넷 연결 또는 Supabase 설정을 확인해 주세요.");
   }
-
-  event.currentTarget.reset();
-  syncAuthFields();
-  setAuthMessage("회원가입이 완료됐습니다. 이제 로그인해 주세요.", false);
 }
 
 async function logout() {
@@ -788,7 +811,30 @@ function setAuthMessage(message, isError = true) {
 }
 
 function toAuthEmail(loginId) {
-  return `${loginId}@workforce.local`;
+  const safeId = String(loginId)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "_");
+  return `${safeId}@yangpyeongsafety.app`;
+}
+
+function translateSupabaseError(message) {
+  if (!message) {
+    return "알 수 없는 오류입니다.";
+  }
+  if (message.includes("already") || message.includes("registered")) {
+    return "이미 사용 중인 아이디입니다.";
+  }
+  if (message.includes("Password")) {
+    return "비밀번호 조건을 확인해 주세요. 보통 6자리 이상이어야 합니다.";
+  }
+  if (message.includes("email")) {
+    return "아이디 형식 변환 중 문제가 발생했습니다. 영문/숫자 조합 아이디로 다시 시도해 주세요.";
+  }
+  if (message.includes("Database")) {
+    return "Supabase SQL 테이블 또는 회원가입 트리거가 아직 준비되지 않았습니다.";
+  }
+  return message;
 }
 
 function normalizeRole(value) {
