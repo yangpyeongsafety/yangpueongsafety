@@ -24,7 +24,7 @@
     </header>
     <main class="dashboard">
       <section class="panel auth-panel auth-single-panel">
-        <form id="signupForm" class="subpanel stack-form" method="post" action="javascript:void(0)" autocomplete="off">
+        <form id="signupForm" class="subpanel stack-form" method="post" action="#" autocomplete="off">
           <h2>회원가입</h2>
           <label>
             권한
@@ -57,8 +57,77 @@
       </section>
     </main>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="app.js"></script>
+  <script>
+    const signupForm = document.getElementById("signupForm");
+    const authMessage = document.getElementById("authMessage");
+
+    function setSignupMessage(message, isError = true) {
+      authMessage.textContent = message;
+      authMessage.className = isError ? "auth-message error" : "auth-message success";
+    }
+
+    function signupEmail(loginId) {
+      const safeId = String(loginId)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]/g, "_");
+      return `${safeId}@yangpyeongsafety.app`;
+    }
+
+    signupForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const formData = new FormData(signupForm);
+      const role = formData.get("role");
+      const name = String(formData.get("name") || "").trim();
+      const phone = String(formData.get("phone") || "").trim();
+      const loginId = String(formData.get("signupId") || "").trim();
+      const password = String(formData.get("signupPassword") || "").trim();
+
+      if (!name || !loginId || !password) {
+        setSignupMessage("회원가입 항목을 모두 입력해 주세요.");
+        return;
+      }
+
+      setSignupMessage("회원가입을 처리 중입니다. 잠시만 기다려 주세요.", false);
+
+      try {
+        const response = await fetch(`${window.SUPABASE_URL}/auth/v1/signup`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: window.SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${window.SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            email: signupEmail(loginId),
+            password,
+            data: {
+              login_id: loginId,
+              role,
+              name,
+              phone
+            }
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          setSignupMessage(`회원가입 실패: ${result.msg || result.message || "Supabase 오류가 발생했습니다."}`);
+          return;
+        }
+
+        signupForm.reset();
+        setSignupMessage("회원가입이 완료됐습니다. 로그인 페이지에서 로그인해 주세요.", false);
+      } catch (error) {
+        setSignupMessage(`회원가입 요청 실패: ${error.message}`);
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js?v=20260423-1"></script>
 </body>
 </html>
