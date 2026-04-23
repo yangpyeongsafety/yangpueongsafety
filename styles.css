@@ -51,6 +51,13 @@ body {
   text-decoration: none;
 }
 
+.session-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .hero {
   display: grid;
   grid-template-columns: 1.4fr 0.8fr;
