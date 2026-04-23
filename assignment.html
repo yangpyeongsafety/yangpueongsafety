@@ -97,7 +97,14 @@
         <div class="dual-grid">
           <div class="subpanel">
             <h3>인력 등록</h3>
-            <form id="workerForm" class="stack-form">
+            <form
+              id="workerForm"
+              class="stack-form"
+              method="post"
+              action="#"
+              autocomplete="off"
+              onsubmit="window.directWorkerSubmit(event); return false;"
+            >
               <label>
                 이름
                 <input type="text" name="name" placeholder="예: 김민수" required />
@@ -106,7 +113,7 @@
                 연락처
                 <input type="text" name="phone" placeholder="010-0000-0000" required />
               </label>
-              <button type="submit" class="secondary-btn">인력 추가</button>
+              <button type="button" class="secondary-btn" onclick="window.directWorkerSubmit(event)">인력 추가</button>
             </form>
             <div class="chips" id="workerChips"></div>
           </div>
@@ -146,6 +153,7 @@
   <script src="supabase-config.js"></script>
   <script>
     const requestFormDirect = document.getElementById("requestForm");
+    const workerFormDirect = document.getElementById("workerForm");
     const requestMessage = document.getElementById("authMessage");
 
     function setRequestMessage(message, isError = true) {
@@ -242,6 +250,41 @@
       }
     }
 
+    function renderDirectWorkers(workers) {
+      const chips = document.getElementById("workerChips");
+      const workerSelect = document.getElementById("assignmentWorkerSelect");
+
+      if (chips) {
+        chips.innerHTML = workers.length
+          ? workers
+              .map((worker) => `<span class="chip">${escapeDirectHtml(worker.name)} · ${escapeDirectHtml(worker.phone || "연락처 없음")}</span>`)
+              .join("")
+          : '<p class="empty">등록된 인력이 없습니다.</p>';
+      }
+
+      if (workerSelect) {
+        workerSelect.innerHTML = workers.length
+          ? workers
+              .map((worker) => `<option value="${worker.id}">${escapeDirectHtml(worker.name)} (${escapeDirectHtml(worker.phone || "연락처 없음")})</option>`)
+              .join("")
+          : '<option value="">인력이 없습니다</option>';
+      }
+    }
+
+    window.directLoadWorkers = async function directLoadWorkers() {
+      const stored = getStoredSession();
+      if (!stored?.profile?.id || stored.profile.role !== "admin") {
+        return;
+      }
+
+      try {
+        const workers = await supabaseRest("workers?select=*&order=name.asc");
+        renderDirectWorkers(workers || []);
+      } catch (error) {
+        setRequestMessage(`인력 목록 불러오기 실패: ${error.message}`);
+      }
+    };
+
     window.directLoadRequests = async function directLoadRequests() {
       const stored = getStoredSession();
       if (!stored?.profile?.id || stored.profile.role !== "admin") {
@@ -263,6 +306,7 @@
       if (event) {
         event.preventDefault();
         event.stopPropagation();
+        event.stopImmediatePropagation();
       }
 
       setRequestMessage("버튼 클릭 확인. 요청을 저장하는 중입니다...", false);
@@ -327,8 +371,52 @@
       return false;
     };
 
+    window.directWorkerSubmit = async function directWorkerSubmit(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+      }
+
+      setRequestMessage("인력 추가 버튼 클릭 확인. 저장하는 중입니다...", false);
+
+      const stored = getStoredSession();
+      if (!stored?.profile?.id || stored.profile.role !== "admin") {
+        setRequestMessage("관리자 로그인 세션이 없습니다. 다시 로그인해 주세요.");
+        return false;
+      }
+
+      const formData = new FormData(workerFormDirect);
+      const name = String(formData.get("name") || "").trim();
+      const phone = String(formData.get("phone") || "").trim();
+
+      if (!name || !phone) {
+        setRequestMessage("인력 이름과 연락처를 모두 입력해 주세요.");
+        return false;
+      }
+
+      try {
+        await supabaseRest("workers", {
+          method: "POST",
+          headers: {
+            Prefer: "return=representation"
+          },
+          body: JSON.stringify({ name, phone })
+        });
+
+        workerFormDirect.reset();
+        await window.directLoadWorkers();
+        setRequestMessage("인력이 추가됐습니다. 아래 인력 목록과 배정 선택에 바로 반영됐습니다.", false);
+      } catch (error) {
+        setRequestMessage(`인력 추가 실패: ${error.message}`);
+      }
+
+      return false;
+    };
+
     window.addEventListener("load", () => {
       window.directLoadRequests();
+      window.directLoadWorkers();
     });
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
