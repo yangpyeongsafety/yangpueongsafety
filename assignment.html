@@ -187,6 +187,78 @@
       return data;
     }
 
+    function escapeDirectHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function formatDirectDate(value) {
+      if (!value) {
+        return "-";
+      }
+      return new Date(`${value}T00:00:00`).toLocaleDateString("ko-KR");
+    }
+
+    function renderDirectRequests(requests, clients) {
+      const table = document.getElementById("requestsTable");
+      const requestSelect = document.getElementById("assignmentRequestSelect");
+      const clientMap = new Map(clients.map((client) => [client.id, client]));
+
+      if (table) {
+        if (requests.length === 0) {
+          table.innerHTML = '<tr><td colspan="6" class="empty-row">등록된 요청이 없습니다.</td></tr>';
+        } else {
+          table.innerHTML = requests
+            .map((request) => {
+              const client = clientMap.get(request.client_id);
+              return `
+                <tr>
+                  <td>${escapeDirectHtml(client?.name || "-")}</td>
+                  <td>${escapeDirectHtml(request.contact_method || "-")}</td>
+                  <td>${Number(request.headcount || 0)}명</td>
+                  <td>${escapeDirectHtml(request.site_location || "-")}</td>
+                  <td>${formatDirectDate(request.work_date)}</td>
+                  <td><span class="status-pill">${escapeDirectHtml(request.status || "대기")}</span></td>
+                </tr>
+              `;
+            })
+            .join("");
+        }
+      }
+
+      if (requestSelect) {
+        requestSelect.innerHTML = requests.length
+          ? requests
+              .map((request) => {
+                const client = clientMap.get(request.client_id);
+                return `<option value="${request.id}">${escapeDirectHtml(client?.name || "-")} / ${escapeDirectHtml(request.site_location || "-")} / ${Number(request.headcount || 0)}명</option>`;
+              })
+              .join("")
+          : '<option value="">요청이 없습니다</option>';
+      }
+    }
+
+    window.directLoadRequests = async function directLoadRequests() {
+      const stored = getStoredSession();
+      if (!stored?.profile?.id || stored.profile.role !== "admin") {
+        return;
+      }
+
+      try {
+        const [clients, requests] = await Promise.all([
+          supabaseRest("clients?select=*&order=name.asc"),
+          supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc")
+        ]);
+        renderDirectRequests(requests || [], clients || []);
+      } catch (error) {
+        setRequestMessage(`신청 내역 불러오기 실패: ${error.message}`);
+      }
+    };
+
     window.directRequestSubmit = async function directRequestSubmit(event) {
       if (event) {
         event.preventDefault();
@@ -246,13 +318,18 @@
         });
 
         requestFormDirect.reset();
-        setRequestMessage("요청이 등록됐습니다. 새로고침하면 목록에 반영됩니다.", false);
+        await window.directLoadRequests();
+        setRequestMessage("요청이 등록됐습니다. 아래 신청 내역에 바로 반영됐습니다.", false);
       } catch (error) {
         setRequestMessage(`요청 등록 실패: ${error.message}`);
       }
 
       return false;
     };
+
+    window.addEventListener("load", () => {
+      window.directLoadRequests();
+    });
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js?v=20260423-1"></script>
