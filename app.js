@@ -52,13 +52,13 @@ bootstrap().catch((error) => {
 });
 
 async function bootstrap() {
+  bindEvents();
+  syncAuthFields();
+  renderSessionBar();
   if (!supabase) {
     showStartupError("Supabase 스크립트를 불러오지 못했습니다. 인터넷 연결 또는 supabase-config.js를 확인해 주세요.");
     return;
   }
-  bindEvents();
-  syncAuthFields();
-  renderSessionBar();
   await hydrateSession();
   const allowed = await enforceAccess();
   if (!allowed) {
@@ -212,6 +212,10 @@ async function loadPageData() {
 
 async function handleLoginSubmit(event) {
   event.preventDefault();
+  if (!supabase) {
+    setAuthMessage("Supabase 연결이 준비되지 않았습니다. 잠시 후 새로고침해 주세요.");
+    return;
+  }
   const data = new FormData(event.currentTarget);
   const loginId = String(data.get("loginId") || "").trim();
   const password = String(data.get("password") || "").trim();
@@ -239,6 +243,10 @@ async function handleLoginSubmit(event) {
 
 async function handleSignupSubmit(event) {
   event.preventDefault();
+  if (!supabase) {
+    setAuthMessage("Supabase 연결이 준비되지 않았습니다. 잠시 후 새로고침해 주세요.");
+    return;
+  }
   const data = new FormData(event.currentTarget);
   const role = normalizeRole(String(data.get("role") || "").trim());
   const loginId = String(data.get("signupId") || "").trim();
