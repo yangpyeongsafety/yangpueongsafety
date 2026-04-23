@@ -111,10 +111,6 @@ function loadFallbackSession() {
     if (!parsed?.auth?.access_token || !parsed?.profile) {
       return null;
     }
-    if (parsed.auth.expires_at && parsed.auth.expires_at < Math.floor(Date.now() / 1000)) {
-      localStorage.removeItem("workforce.session");
-      return null;
-    }
     return parsed;
   } catch (error) {
     console.error(error);

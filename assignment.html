@@ -178,12 +178,70 @@
       }
     }
 
-    async function supabaseRest(path, options = {}) {
+    function saveStoredSession(stored, auth) {
+      const authPayload = {
+        access_token: auth.access_token,
+        refresh_token: auth.refresh_token || stored.auth.refresh_token,
+        expires_in: auth.expires_in,
+        expires_at: Math.floor(Date.now() / 1000) + Number(auth.expires_in || 0),
+        token_type: auth.token_type,
+        user: auth.user || stored.auth.user
+      };
+      const nextStored = {
+        ...stored,
+        auth: authPayload
+      };
+      localStorage.setItem("workforce.session", JSON.stringify(nextStored));
+      localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify({
+        currentSession: authPayload,
+        expiresAt: authPayload.expires_at
+      }));
+      return nextStored;
+    }
+
+    async function refreshStoredSession(stored) {
+      const refreshToken = stored?.auth?.refresh_token;
+      if (!refreshToken) {
+        throw new Error("로그인 시간이 만료됐습니다. 다시 로그인해 주세요.");
+      }
+
+      const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+          refresh_token: refreshToken
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        localStorage.removeItem("workforce.session");
+        throw new Error(data?.message || "로그인 시간이 만료됐습니다. 다시 로그인해 주세요.");
+      }
+
+      return saveStoredSession(stored, data);
+    }
+
+    async function getValidStoredSession() {
       const stored = getStoredSession();
-      const token = stored?.auth?.access_token;
-      if (!token) {
+      if (!stored?.auth?.access_token) {
         throw new Error("로그인 세션이 없습니다. 다시 로그인해 주세요.");
       }
+
+      const expiresAt = Number(stored.auth.expires_at || 0);
+      if (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 60) {
+        return refreshStoredSession(stored);
+      }
+
+      return stored;
+    }
+
+    async function supabaseRest(path, options = {}, retry = true) {
+      const stored = await getValidStoredSession();
+      const token = stored.auth.access_token;
 
       const response = await fetch(`${window.SUPABASE_URL}/rest/v1/${path}`, {
         ...options,
@@ -198,6 +256,11 @@
       const text = await response.text();
       const data = text ? JSON.parse(text) : null;
       if (!response.ok) {
+        const message = data?.message || data?.msg || response.statusText;
+        if (retry && /jwt expired/i.test(message)) {
+          await refreshStoredSession(stored);
+          return supabaseRest(path, options, false);
+        }
         throw new Error(data?.message || data?.msg || response.statusText);
       }
       return data;
