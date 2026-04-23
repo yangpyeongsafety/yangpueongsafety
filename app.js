@@ -108,7 +108,7 @@ function redirectToLogin(message) {
   params.set("redirect", `${currentPage}.html`);
   params.set("role", pageRole === "user" ? "worker" : pageRole);
   params.set("message", message);
-  window.location.href = `login.html?${params.toString()}`;
+  window.location.href = `index.html?${params.toString()}`;
 }
 
 function bindEvents() {
@@ -261,7 +261,7 @@ async function handleSignupSubmit(event) {
 
 async function logout() {
   await supabase.auth.signOut();
-  window.location.href = "login.html";
+  window.location.href = "index.html";
 }
 
 async function handleRequestSubmit(event) {
@@ -403,7 +403,7 @@ function renderSessionBar() {
     return;
   }
   if (!state.session || !state.profile) {
-    els.sessionBar.innerHTML = `<span>로그인 전입니다.</span><a class="session-link" href="login.html">로그인</a>`;
+    els.sessionBar.innerHTML = `<span>로그인 전입니다.</span><a class="session-link" href="index.html">로그인</a>`;
     return;
   }
   const roleLabel = state.profile.role === "admin" ? "관리자" : "사용자";
@@ -799,7 +799,7 @@ function normalizeRole(value) {
 }
 
 function defaultPageForRole(role) {
-  return role === "admin" ? "index.html" : "worker-entry.html";
+  return role === "admin" ? "main.html" : "worker-entry.html";
 }
 
 function emptyRow(message, colspan) {
