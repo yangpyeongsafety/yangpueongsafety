@@ -601,19 +601,14 @@
           supabaseRest("workers?select=id,name,phone&order=name.asc")
         ]);
         const validRequestIds = new Set((currentRequests || []).map((request) => request.id));
-        const validWorkerIds = new Set((currentWorkers || []).map((worker) => worker.id));
         const resolvedWorkerIds = selectedWorkerOptions
           .map((selected) => {
-            if (validWorkerIds.has(selected.id)) {
-              return selected.id;
-            }
-
             const matchedWorker = (currentWorkers || []).find(
               (worker) =>
                 normalizeDirectText(worker.name) === normalizeDirectText(selected.name)
                 && normalizeDirectText(worker.phone) === normalizeDirectText(selected.phone)
             );
-            return matchedWorker?.id || "";
+            return matchedWorker?.id || selected.id || "";
           })
           .filter(Boolean);
         const uniqueWorkerIds = [...new Set(resolvedWorkerIds)];
@@ -663,6 +658,46 @@
         setRequestMessage("배정이 저장됐습니다. 하단 배정 내역에 바로 반영됐습니다.", false);
       } catch (error) {
         if (error.message.includes("assignments_worker_id_fkey")) {
+          try {
+            const freshWorkers = await supabaseRest("workers?select=id,name,phone&order=name.asc");
+            const retryWorkerIds = selectedWorkerOptions
+              .map((selected) => {
+                const matchedWorker = (freshWorkers || []).find(
+                  (worker) =>
+                    normalizeDirectText(worker.name) === normalizeDirectText(selected.name)
+                    && normalizeDirectText(worker.phone) === normalizeDirectText(selected.phone)
+                );
+                return matchedWorker?.id || "";
+              })
+              .filter(Boolean);
+            const uniqueRetryWorkerIds = [...new Set(retryWorkerIds)];
+
+            if (uniqueRetryWorkerIds.length === selectedWorkerOptions.length) {
+              await supabaseRest("assignments?on_conflict=request_id,worker_id", {
+                method: "POST",
+                headers: {
+                  Prefer: "resolution=merge-duplicates,return=representation"
+                },
+                body: JSON.stringify(uniqueRetryWorkerIds.map((workerId) => ({
+                  request_id: requestId,
+                  worker_id: workerId,
+                  created_by: stored.profile.id
+                })))
+              });
+
+              assignmentFormDirect.reset();
+              await Promise.all([
+                window.directLoadRequests(),
+                window.directLoadWorkers(),
+                window.directLoadAssignments()
+              ]);
+              setRequestMessage("배정이 저장됐습니다. 오래된 인력 ID는 최신 DB 인력으로 자동 연결했습니다.", false);
+              return false;
+            }
+          } catch (retryError) {
+            console.error(retryError);
+          }
+
           await window.directLoadWorkers();
           setRequestMessage("선택한 인력 ID가 DB와 맞지 않아 인력 목록을 새로 불러왔습니다. 다시 선택해서 저장해 주세요.");
           return false;
@@ -681,5 +716,14 @@
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js?v=20260423-1"></script>
+  <script>
+    window.addEventListener("load", () => {
+      setTimeout(() => {
+        window.directLoadRequests?.();
+        window.directLoadWorkers?.();
+        window.directLoadAssignments?.();
+      }, 700);
+    });
+  </script>
 </body>
 </html>
