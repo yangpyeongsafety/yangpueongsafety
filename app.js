@@ -228,7 +228,6 @@ async function handleSignupSubmit(event) {
   const password = String(data.get("signupPassword") || "").trim();
   const name = String(data.get("name") || "").trim();
   const phone = String(data.get("phone") || "").trim();
-  const skill = String(data.get("skill") || "").trim();
 
   if (!loginId || !password || !name) {
     setAuthMessage("회원가입 항목을 모두 입력해 주세요.");
@@ -243,8 +242,7 @@ async function handleSignupSubmit(event) {
         login_id: loginId,
         role,
         name,
-        phone,
-        skill
+        phone
       }
     }
   });
