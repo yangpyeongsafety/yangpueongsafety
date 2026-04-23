@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>회원가입</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=SUIT:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="signup" data-role="public">
+  <div class="app-shell">
+    <div class="session-bar" id="sessionBar"></div>
+    <header class="hero auth-hero">
+      <div>
+        <p class="eyebrow">SIGN UP</p>
+        <h1 id="userGateName">역할별 회원가입</h1>
+        <p class="hero-copy" id="authHint">관리자 또는 사용자 계정을 새로 만드세요.</p>
+      </div>
+    </header>
+    <main class="dashboard">
+      <section class="panel auth-panel auth-single-panel">
+        <form id="signupForm" class="subpanel stack-form">
+          <h2>회원가입</h2>
+          <label>
+            권한
+            <select name="role" id="signupRole" required>
+              <option value="admin">관리자</option>
+              <option value="worker">사용자</option>
+            </select>
+          </label>
+          <label>
+            이름
+            <input type="text" name="name" required />
+            <small id="authNameField">관리자 이름을 입력하세요.</small>
+          </label>
+          <label>
+            연락처
+            <input type="text" name="phone" placeholder="010-0000-0000" />
+          </label>
+          <label>
+            보유 스킬
+            <input type="text" name="skill" placeholder="예: 지게차, 상하차" />
+          </label>
+          <label>
+            아이디
+            <input type="text" name="signupId" required />
+          </label>
+          <label>
+            비밀번호
+            <input type="password" name="signupPassword" required />
+          </label>
+          <button type="submit" class="secondary-btn">회원가입</button>
+          <p class="auth-switch">이미 계정이 있으면 <a href="login.html">로그인</a>으로 이동하세요.</p>
+        </form>
+        <p id="authMessage" class="auth-message"></p>
+      </section>
+    </main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

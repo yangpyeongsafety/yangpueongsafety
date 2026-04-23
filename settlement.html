@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>정산</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=SUIT:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="settlement" data-role="admin">
+  <div class="app-shell">
+    <div class="session-bar" id="sessionBar"></div>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">SETTLEMENT</p>
+        <h1>거래처별 근무기록과 공수를 확인합니다</h1>
+        <p class="hero-copy">근무일, 인력명, 실근무시간, 공수까지 한 번에 조회하고 내려받을 수 있습니다.</p>
+      </div>
+      <nav class="top-nav">
+        <a href="index.html">메인</a>
+        <a href="assignment.html">인력배정</a>
+        <button type="button" class="ghost-btn" data-action="logout">로그아웃</button>
+      </nav>
+    </header>
+
+    <main class="dashboard">
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">SETTLEMENT</p>
+            <h2>거래처별 근무일 / 근무 인력 데이터</h2>
+          </div>
+          <button id="exportCsvBtn" class="ghost-btn">CSV 다운로드</button>
+        </div>
+        <div class="filters">
+          <label>
+            거래처 필터
+            <select id="reportClientFilter"></select>
+          </label>
+        </div>
+        <div class="summary-grid" id="clientSummaryGrid"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>거래처명</th>
+                <th>근무일</th>
+                <th>현장 위치</th>
+                <th>인력명</th>
+                <th>출근시간</th>
+                <th>퇴근시간</th>
+                <th>실근무시간</th>
+                <th>공수</th>
+              </tr>
+            </thead>
+            <tbody id="reportTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>인력배정</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=SUIT:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="assignment" data-role="admin">
+  <div class="app-shell">
+    <div class="session-bar" id="sessionBar"></div>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">ASSIGNMENT</p>
+        <h1>거래처 요청과 인력 배정을 관리합니다</h1>
+        <p class="hero-copy">전화나 문자로 받은 요청을 등록하고 보유 인력을 현장에 배정하세요.</p>
+      </div>
+      <nav class="top-nav">
+        <a href="index.html">메인</a>
+        <a href="settlement.html">정산</a>
+        <button type="button" class="ghost-btn" data-action="logout">로그아웃</button>
+      </nav>
+    </header>
+
+    <main class="dashboard">
+      <section class="panel panel-highlight">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">1. 요청 접수</p>
+            <h2>거래처 요청 등록</h2>
+          </div>
+        </div>
+        <form id="requestForm" class="form-grid">
+          <label>
+            거래처명
+            <input type="text" name="clientName" placeholder="예: 동서물류" required />
+          </label>
+          <label>
+            연락 방식
+            <select name="contactMethod" required>
+              <option value="문자">문자</option>
+              <option value="전화">전화</option>
+            </select>
+          </label>
+          <label>
+            요청 인원
+            <input type="number" name="headcount" min="1" placeholder="예: 3" required />
+          </label>
+          <label>
+            현장 위치
+            <input type="text" name="siteLocation" placeholder="예: 인천 남동공단" required />
+          </label>
+          <label>
+            근무일
+            <input type="date" name="workDate" required />
+          </label>
+          <label class="full-width">
+            요청 내용
+            <textarea name="notes" rows="3" placeholder="예: 오전 7시까지 상차팀 3명 필요"></textarea>
+          </label>
+          <button type="submit" class="primary-btn">요청 등록</button>
+        </form>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>거래처</th>
+                <th>연락</th>
+                <th>인원</th>
+                <th>현장</th>
+                <th>근무일</th>
+                <th>상태</th>
+              </tr>
+            </thead>
+            <tbody id="requestsTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">2. 인력 배정</p>
+            <h2>보유 인력 관리 및 현장 배치</h2>
+          </div>
+        </div>
+        <div class="dual-grid">
+          <div class="subpanel">
+            <h3>인력 등록</h3>
+            <form id="workerForm" class="stack-form">
+              <label>
+                이름
+                <input type="text" name="name" placeholder="예: 김민수" required />
+              </label>
+              <label>
+                연락처
+                <input type="text" name="phone" placeholder="010-0000-0000" required />
+              </label>
+              <label>
+                보유 스킬
+                <input type="text" name="skill" placeholder="예: 지게차, 상하차" />
+              </label>
+              <button type="submit" class="secondary-btn">인력 추가</button>
+            </form>
+            <div class="chips" id="workerChips"></div>
+          </div>
+
+          <div class="subpanel">
+            <h3>현장 배정</h3>
+            <form id="assignmentForm" class="stack-form">
+              <label>
+                배정할 요청
+                <select name="requestId" id="assignmentRequestSelect" required></select>
+              </label>
+              <label>
+                배정 인력
+                <select name="workerIds" id="assignmentWorkerSelect" multiple required></select>
+                <small>Ctrl 또는 Cmd로 여러 명 선택</small>
+              </label>
+              <button type="submit" class="primary-btn">배정 저장</button>
+            </form>
+            <div class="assignment-list" id="assignmentList"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <template id="assignmentCardTemplate">
+    <article class="assignment-card">
+      <div class="assignment-card-header">
+        <h3></h3>
+        <span class="badge"></span>
+      </div>
+      <p class="assignment-meta"></p>
+      <div class="assigned-workers"></div>
+    </article>
+  </template>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

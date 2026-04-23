@@ -1,0 +1,3 @@
+window.SUPABASE_URL = "https://riyxhsesprzvnvconhos.supabase.co";
+window.SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJpeXhoc2VzcHJ6dm52Y29uaG9zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NTYwOTAsImV4cCI6MjA5MjQzMjA5MH0.xS6Bhr4mlu1z2VL1N8qwBoruChJBzZvOqrUkzOGP880";
