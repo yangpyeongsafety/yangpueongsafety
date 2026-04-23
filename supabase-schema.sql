@@ -4,7 +4,6 @@ create table if not exists public.workers (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   phone text,
-  skill text,
   created_at timestamptz not null default now()
 );
 
@@ -14,7 +13,6 @@ create table if not exists public.profiles (
   role text not null check (role in ('admin', 'worker')),
   name text not null,
   phone text,
-  skill text,
   worker_id uuid references public.workers(id) on delete set null,
   created_at timestamptz not null default now()
 );
@@ -29,12 +27,12 @@ create table if not exists public.clients (
 create table if not exists public.job_requests (
   id uuid primary key default gen_random_uuid(),
   client_id uuid not null references public.clients(id) on delete cascade,
-  contact_method text not null check (contact_method in ('문자', '전화')),
+  contact_method text not null,
   headcount integer not null check (headcount > 0),
   site_location text not null,
   work_date date not null,
   notes text,
-  status text not null default '대기',
+  status text not null default 'pending',
   created_by uuid not null references public.profiles(id),
   created_at timestamptz not null default now()
 );
@@ -85,14 +83,12 @@ declare
   meta_role text;
   meta_name text;
   meta_phone text;
-  meta_skill text;
   meta_login_id text;
   matched_worker_id uuid;
 begin
   meta_role := coalesce(new.raw_user_meta_data->>'role', 'worker');
   meta_name := coalesce(new.raw_user_meta_data->>'name', '');
   meta_phone := new.raw_user_meta_data->>'phone';
-  meta_skill := new.raw_user_meta_data->>'skill';
   meta_login_id := coalesce(new.raw_user_meta_data->>'login_id', split_part(new.email, '@', 1));
 
   if meta_role = 'worker' then
@@ -104,14 +100,14 @@ begin
     limit 1;
 
     if matched_worker_id is null then
-      insert into public.workers (name, phone, skill)
-      values (meta_name, meta_phone, meta_skill)
+      insert into public.workers (name, phone)
+      values (meta_name, meta_phone)
       returning id into matched_worker_id;
     end if;
   end if;
 
-  insert into public.profiles (id, login_id, role, name, phone, skill, worker_id)
-  values (new.id, meta_login_id, meta_role, meta_name, meta_phone, meta_skill, matched_worker_id);
+  insert into public.profiles (id, login_id, role, name, phone, worker_id)
+  values (new.id, meta_login_id, meta_role, meta_name, meta_phone, matched_worker_id);
 
   return new;
 end;
