@@ -14,17 +14,27 @@
 </head>
 <body data-page="signup" data-role="public">
   <div class="app-shell">
-    <div class="session-bar" id="sessionBar"></div>
+    <div class="session-bar" id="sessionBar">
+      <span>회원가입 페이지입니다.</span>
+      <a class="session-link" href="index.html">로그인</a>
+    </div>
     <header class="hero auth-hero">
       <div>
         <p class="eyebrow">SIGN UP</p>
-        <h1 id="userGateName">역할별 회원가입</h1>
-        <p class="hero-copy" id="authHint">관리자 또는 사용자 계정을 새로 만드세요.</p>
+        <h1>회원가입</h1>
+        <p class="hero-copy">관리자 또는 사용자 계정을 새로 만드세요.</p>
       </div>
     </header>
     <main class="dashboard">
       <section class="panel auth-panel auth-single-panel">
-        <form id="signupForm" class="subpanel stack-form" method="post" action="#" autocomplete="off">
+        <form
+          id="signupForm"
+          class="subpanel stack-form"
+          method="post"
+          action="#"
+          autocomplete="off"
+          onsubmit="window.directSignup(event); return false;"
+        >
           <h2>회원가입</h2>
           <label>
             권한
@@ -36,7 +46,7 @@
           <label>
             이름
             <input type="text" name="name" required />
-            <small id="authNameField">관리자 이름을 입력하세요.</small>
+            <small id="authNameField">사용자는 배정된 인력 이름과 같게 입력해 주세요.</small>
           </label>
           <label>
             연락처
@@ -50,13 +60,14 @@
             비밀번호
             <input type="password" name="signupPassword" required />
           </label>
-          <button type="submit" class="secondary-btn">회원가입</button>
+          <button type="button" class="secondary-btn" onclick="window.directSignup(event)">회원가입</button>
           <p class="auth-switch">이미 계정이 있으면 <a href="index.html">로그인</a>으로 이동하세요.</p>
         </form>
-        <p id="authMessage" class="auth-message"></p>
+        <p id="authMessage" class="auth-message">회원가입 준비 중입니다...</p>
       </section>
     </main>
   </div>
+
   <script src="supabase-config.js"></script>
   <script>
     const signupForm = document.getElementById("signupForm");
@@ -75,9 +86,18 @@
       return `${safeId}@yangpyeongsafety.app`;
     }
 
-    signupForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      event.stopImmediatePropagation();
+    window.directSignup = async function directSignup(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      setSignupMessage("버튼 클릭 확인. 회원가입을 처리 중입니다...", false);
+
+      if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+        setSignupMessage("Supabase 설정을 불러오지 못했습니다. supabase-config.js를 확인해 주세요.");
+        return false;
+      }
 
       const formData = new FormData(signupForm);
       const role = formData.get("role");
@@ -88,10 +108,8 @@
 
       if (!name || !loginId || !password) {
         setSignupMessage("회원가입 항목을 모두 입력해 주세요.");
-        return;
+        return false;
       }
-
-      setSignupMessage("회원가입을 처리 중입니다. 잠시만 기다려 주세요.", false);
 
       try {
         const response = await fetch(`${window.SUPABASE_URL}/auth/v1/signup`, {
@@ -117,7 +135,7 @@
 
         if (!response.ok) {
           setSignupMessage(`회원가입 실패: ${result.msg || result.message || "Supabase 오류가 발생했습니다."}`);
-          return;
+          return false;
         }
 
         signupForm.reset();
@@ -125,9 +143,11 @@
       } catch (error) {
         setSignupMessage(`회원가입 요청 실패: ${error.message}`);
       }
-    });
+
+      return false;
+    };
+
+    setSignupMessage("회원가입 준비 완료. 정보를 입력하고 버튼을 눌러주세요.", false);
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=20260423-1"></script>
 </body>
 </html>
