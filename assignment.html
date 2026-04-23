@@ -36,7 +36,14 @@
             <h2>거래처 요청 등록</h2>
           </div>
         </div>
-        <form id="requestForm" class="form-grid">
+        <form
+          id="requestForm"
+          class="form-grid"
+          method="post"
+          action="#"
+          autocomplete="off"
+          onsubmit="window.directRequestSubmit(event); return false;"
+        >
           <label>
             거래처명
             <input type="text" name="clientName" placeholder="예: 동서물류" required />
@@ -60,7 +67,7 @@
             근무일
             <input type="date" name="workDate" required />
           </label>
-          <button type="submit" class="primary-btn">요청 등록</button>
+          <button type="button" class="primary-btn" onclick="window.directRequestSubmit(event)">요청 등록</button>
         </form>
         <p id="authMessage" class="auth-message"></p>
         <div class="table-wrap">
@@ -136,8 +143,118 @@
     </article>
   </template>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
+  <script>
+    const requestFormDirect = document.getElementById("requestForm");
+    const requestMessage = document.getElementById("authMessage");
+
+    function setRequestMessage(message, isError = true) {
+      requestMessage.textContent = message;
+      requestMessage.className = isError ? "auth-message error" : "auth-message success";
+    }
+
+    function getStoredSession() {
+      try {
+        const raw = localStorage.getItem("workforce.session");
+        return raw ? JSON.parse(raw) : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    async function supabaseRest(path, options = {}) {
+      const stored = getStoredSession();
+      const token = stored?.auth?.access_token;
+      if (!token) {
+        throw new Error("로그인 세션이 없습니다. 다시 로그인해 주세요.");
+      }
+
+      const response = await fetch(`${window.SUPABASE_URL}/rest/v1/${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${token}`,
+          ...(options.headers || {})
+        }
+      });
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+      if (!response.ok) {
+        throw new Error(data?.message || data?.msg || response.statusText);
+      }
+      return data;
+    }
+
+    window.directRequestSubmit = async function directRequestSubmit(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      setRequestMessage("버튼 클릭 확인. 요청을 저장하는 중입니다...", false);
+
+      const stored = getStoredSession();
+      if (!stored?.profile?.id || stored.profile.role !== "admin") {
+        setRequestMessage("관리자 로그인 세션이 없습니다. 다시 로그인해 주세요.");
+        return false;
+      }
+
+      const formData = new FormData(requestFormDirect);
+      const clientName = String(formData.get("clientName") || "").trim();
+      const contactMethod = String(formData.get("contactMethod") || "").trim();
+      const headcount = Number(formData.get("headcount"));
+      const siteLocation = String(formData.get("siteLocation") || "").trim();
+      const workDate = String(formData.get("workDate") || "").trim();
+
+      if (!clientName || !contactMethod || !headcount || !siteLocation || !workDate) {
+        setRequestMessage("거래처명, 연락 방식, 요청 인원, 현장 위치, 근무일을 모두 입력해 주세요.");
+        return false;
+      }
+
+      try {
+        const clients = await supabaseRest("clients?on_conflict=name", {
+          method: "POST",
+          headers: {
+            Prefer: "resolution=merge-duplicates,return=representation"
+          },
+          body: JSON.stringify({
+            name: clientName,
+            created_by: stored.profile.id
+          })
+        });
+        const client = clients?.[0];
+        if (!client?.id) {
+          throw new Error("거래처 저장 결과를 확인하지 못했습니다.");
+        }
+
+        await supabaseRest("job_requests", {
+          method: "POST",
+          headers: {
+            Prefer: "return=representation"
+          },
+          body: JSON.stringify({
+            client_id: client.id,
+            contact_method: contactMethod,
+            headcount,
+            site_location: siteLocation,
+            work_date: workDate,
+            status: "대기",
+            created_by: stored.profile.id
+          })
+        });
+
+        requestFormDirect.reset();
+        setRequestMessage("요청이 등록됐습니다. 새로고침하면 목록에 반영됩니다.", false);
+      } catch (error) {
+        setRequestMessage(`요청 등록 실패: ${error.message}`);
+      }
+
+      return false;
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js?v=20260423-1"></script>
 </body>
 </html>
