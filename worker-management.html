@@ -403,15 +403,21 @@
       return [
         profile.name || "",
         profile.resident_number || "",
-        profile.phone || "",
+        toExcelText(profile.phone || ""),
         profile.bank_name || "",
-        profile.account_number || "",
+        toExcelText(profile.account_number || ""),
         profile.blood_type || "",
         profile.current_address || "",
         profile.emergency_contact || "",
         profile.hire_date || "",
         profile.login_id || ""
       ];
+    }
+
+    function toExcelText(value) {
+      const text = String(value ?? "");
+      if (!text) return "";
+      return `="${text.replaceAll('"', '""')}"`;
     }
 
     function escapeCsvValue(value) {
