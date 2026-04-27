@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>인력배정</title>
+  <title>현장 배정</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -15,14 +15,16 @@
 <body data-page="assignment" data-role="admin">
   <div class="app-shell">
     <div class="session-bar" id="sessionBar"></div>
+
     <header class="hero">
       <div>
-        <p class="eyebrow">ASSIGNMENT</p>
-        <h1>거래처 요청과 인력 배정을 관리합니다</h1>
-        <p class="hero-copy">전화나 문자로 받은 요청을 등록하고 보유 인력을 현장에 배정하세요.</p>
+        <p class="eyebrow">현장 배정</p>
+        <h1>보유 인력 관리 및 현장 배치</h1>
+        <p class="hero-copy">현장 요청을 등록하고, 배정 가능한 인력을 연결한 뒤 배치내역 페이지에서 저장 결과를 확인하세요.</p>
       </div>
       <nav class="top-nav">
         <a href="main.html">메인</a>
+        <a href="assignment-history.html">배치내역</a>
         <a href="settlement.html">정산</a>
         <a class="ghost-btn" href="logout.html">로그아웃</a>
       </nav>
@@ -32,21 +34,18 @@
       <section class="panel panel-highlight">
         <div class="panel-header">
           <div>
-            <p class="section-kicker">1. 요청 접수</p>
-            <h2>거래처 요청 등록</h2>
+            <p class="section-kicker">1. 현장 요청</p>
+            <h2>새 요청 등록</h2>
+          </div>
+          <div class="page-tools">
+            <a class="page-link-btn" href="assignment-history.html">배치내역 보기</a>
           </div>
         </div>
-        <form
-          id="requestForm"
-          class="form-grid"
-          method="post"
-          action="#"
-          autocomplete="off"
-          onsubmit="window.directRequestSubmit(event); return false;"
-        >
+
+        <form id="requestForm" class="form-grid" autocomplete="off">
           <label>
-            거래처명
-            <input type="text" name="clientName" placeholder="예: 동서물류" required />
+            업체명
+            <input type="text" name="clientName" placeholder="예: 만보" required />
           </label>
           <label>
             연락 방식
@@ -56,29 +55,31 @@
             </select>
           </label>
           <label>
-            요청 인원
-            <input type="number" name="headcount" min="1" placeholder="예: 3" required />
+            필요 인원
+            <input type="number" name="headcount" min="1" placeholder="2" required />
           </label>
           <label>
-            현장 위치
-            <input type="text" name="siteLocation" placeholder="예: 인천 남동공단" required />
+            현장명
+            <input type="text" name="siteLocation" placeholder="양평 현장" required />
           </label>
           <label>
-            근무일
+            작업일
             <input type="date" name="workDate" required />
           </label>
-          <button type="button" class="primary-btn" onclick="window.directRequestSubmit(event)">요청 등록</button>
+          <button type="submit" class="primary-btn">현장 요청 저장</button>
         </form>
+
         <p id="authMessage" class="auth-message"></p>
+
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>거래처</th>
-                <th>연락</th>
-                <th>인원</th>
-                <th>현장</th>
-                <th>근무일</th>
+                <th>업체명</th>
+                <th>연락 방식</th>
+                <th>배정 현황</th>
+                <th>현장명</th>
+                <th>작업일</th>
                 <th>상태</th>
               </tr>
             </thead>
@@ -91,20 +92,14 @@
         <div class="panel-header">
           <div>
             <p class="section-kicker">2. 인력 배정</p>
-            <h2>보유 인력 관리 및 현장 배치</h2>
+            <h2>보유 인력 등록 및 현장 배정</h2>
           </div>
         </div>
+
         <div class="dual-grid">
           <div class="subpanel">
             <h3>인력 등록</h3>
-            <form
-              id="workerForm"
-              class="stack-form"
-              method="post"
-              action="#"
-              autocomplete="off"
-              onsubmit="window.directWorkerSubmit(event); return false;"
-            >
+            <form id="workerForm" class="stack-form" autocomplete="off">
               <label>
                 이름
                 <input type="text" name="name" placeholder="예: 김민수" required />
@@ -113,61 +108,158 @@
                 연락처
                 <input type="text" name="phone" placeholder="010-0000-0000" required />
               </label>
-              <button type="button" class="secondary-btn" onclick="window.directWorkerSubmit(event)">인력 추가</button>
+              <button type="submit" class="secondary-btn">인력 추가</button>
             </form>
+
             <div class="chips" id="workerChips"></div>
           </div>
 
           <div class="subpanel">
             <h3>현장 배정</h3>
-            <form
-              id="assignmentForm"
-              class="stack-form"
-              method="post"
-              action="#"
-              autocomplete="off"
-              onsubmit="window.directAssignmentSubmit(event); return false;"
-            >
+            <form id="assignmentForm" class="stack-form" autocomplete="off">
               <label>
                 배정할 요청
                 <select name="requestId" id="assignmentRequestSelect" required></select>
               </label>
               <label>
                 배정 인력
-                <select name="workerIds" id="assignmentWorkerSelect" multiple></select>
                 <div class="direct-worker-picker" id="directWorkerPicker"></div>
-                <small>아래 체크박스에서 배정할 인력을 선택하세요.</small>
               </label>
-              <button type="button" class="primary-btn" onclick="window.directAssignmentSubmit(event)">배정 저장</button>
+              <small>배정 저장 후 결과는 하단이 아니라 배치내역 페이지에 표시됩니다.</small>
+              <button type="submit" class="primary-btn">배정 저장</button>
             </form>
-            <div class="assignment-list" id="assignmentList"></div>
           </div>
         </div>
       </section>
     </main>
   </div>
 
-  <template id="assignmentCardTemplate">
-    <article class="assignment-card">
-      <div class="assignment-card-header">
-        <h3></h3>
-        <span class="badge"></span>
-      </div>
-      <p class="assignment-meta"></p>
-      <div class="assigned-workers"></div>
-    </article>
-  </template>
-
   <script src="supabase-config.js"></script>
   <script>
-    const requestFormDirect = document.getElementById("requestForm");
-    const workerFormDirect = document.getElementById("workerForm");
-    const assignmentFormDirect = document.getElementById("assignmentForm");
+    const requestForm = document.getElementById("requestForm");
+    const workerForm = document.getElementById("workerForm");
+    const assignmentForm = document.getElementById("assignmentForm");
+    const sessionBar = document.getElementById("sessionBar");
     const requestMessage = document.getElementById("authMessage");
+    const requestsTable = document.getElementById("requestsTable");
+    const workerChips = document.getElementById("workerChips");
+    const requestSelect = document.getElementById("assignmentRequestSelect");
+    const workerPicker = document.getElementById("directWorkerPicker");
 
-    function setRequestMessage(message, isError = true) {
+    const state = {
+      profile: null,
+      clients: [],
+      requests: [],
+      workers: [],
+      workerProfiles: [],
+      assignments: []
+    };
+
+    function setMessage(message, isError = true) {
       requestMessage.textContent = message;
       requestMessage.className = isError ? "auth-message error" : "auth-message success";
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function normalizeText(value) {
+      return String(value || "").replace(/\s+/g, "").trim();
+    }
+
+    function normalizePhone(value) {
+      return String(value || "").replace(/\D+/g, "");
+    }
+
+    function sleep(ms) {
+      return new Promise((resolve) => window.setTimeout(resolve, ms));
+    }
+
+    function formatContactMethod(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      if (normalized === "text" || normalized === "문자") {
+        return "문자";
+      }
+      if (normalized === "call" || normalized === "전화") {
+        return "전화";
+      }
+      return value || "-";
+    }
+
+    function isPlaceholderName(value) {
+      const text = String(value || "").trim();
+      return !text || /^[?？]+$/.test(text) || /^unknown$/i.test(text);
+    }
+
+    function identityKey(item) {
+      const phone = normalizePhone(item?.phone);
+      const name = normalizeText(item?.name);
+      return phone || name;
+    }
+
+    function workerDisplayScore(worker) {
+      let score = 0;
+      if (worker?.profileId) score += 100;
+      if (worker?.workerRecordId) score += 20;
+      if (normalizePhone(worker?.phone)) score += 10;
+      if (!isPlaceholderName(worker?.name)) score += 10;
+      return score + Math.min(String(worker?.name || "").length, 10);
+    }
+
+    function mergeWorkerRecord(current, candidate) {
+      if (!current) {
+        return { ...candidate };
+      }
+
+      const preferCandidate = workerDisplayScore(candidate) > workerDisplayScore(current);
+      const primary = preferCandidate ? candidate : current;
+      const secondary = preferCandidate ? current : candidate;
+
+      return {
+        name: !isPlaceholderName(primary?.name) ? primary.name : secondary?.name || primary?.name || "",
+        phone: primary?.phone || secondary?.phone || "",
+        profileId: primary?.profileId || secondary?.profileId || "",
+        workerRecordId: primary?.workerRecordId || secondary?.workerRecordId || "",
+        loginId: primary?.loginId || secondary?.loginId || ""
+      };
+    }
+
+    function buildVisibleWorkers() {
+      const map = new Map();
+
+      for (const worker of state.workers || []) {
+        const candidate = {
+          name: worker.name,
+          phone: worker.phone,
+          workerRecordId: worker.id || ""
+        };
+        const key = identityKey(candidate);
+        if (key) {
+          map.set(key, mergeWorkerRecord(map.get(key), candidate));
+        }
+      }
+
+      for (const profile of state.workerProfiles || []) {
+        const candidate = {
+          name: profile.name,
+          phone: profile.phone,
+          profileId: profile.id || "",
+          workerRecordId: profile.worker_id || "",
+          loginId: profile.login_id || ""
+        };
+        const key = identityKey(candidate);
+        if (key) {
+          map.set(key, mergeWorkerRecord(map.get(key), candidate));
+        }
+      }
+
+      return Array.from(map.values()).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
     }
 
     function getStoredSession() {
@@ -188,22 +280,21 @@
         token_type: auth.token_type,
         user: auth.user || stored.auth.user
       };
-      const nextStored = {
-        ...stored,
-        auth: authPayload
-      };
+      const nextStored = { ...stored, auth: authPayload };
+
       localStorage.setItem("workforce.session", JSON.stringify(nextStored));
       localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify({
         currentSession: authPayload,
         expiresAt: authPayload.expires_at
       }));
+
       return nextStored;
     }
 
     async function refreshStoredSession(stored) {
       const refreshToken = stored?.auth?.refresh_token;
       if (!refreshToken) {
-        throw new Error("로그인 시간이 만료됐습니다. 다시 로그인해 주세요.");
+        throw new Error("로그인 시간이 만료되었습니다. 다시 로그인해 주세요.");
       }
 
       const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
@@ -212,15 +303,13 @@
           "Content-Type": "application/json",
           apikey: window.SUPABASE_ANON_KEY
         },
-        body: JSON.stringify({
-          refresh_token: refreshToken
-        })
+        body: JSON.stringify({ refresh_token: refreshToken })
       });
 
       const data = await response.json();
       if (!response.ok) {
         localStorage.removeItem("workforce.session");
-        throw new Error(data?.message || "로그인 시간이 만료됐습니다. 다시 로그인해 주세요.");
+        throw new Error(data?.message || "로그인 시간이 만료되었습니다. 다시 로그인해 주세요.");
       }
 
       return saveStoredSession(stored, data);
@@ -228,8 +317,8 @@
 
     async function getValidStoredSession() {
       const stored = getStoredSession();
-      if (!stored?.auth?.access_token) {
-        throw new Error("로그인 세션이 없습니다. 다시 로그인해 주세요.");
+      if (!stored?.auth?.access_token || !stored?.profile) {
+        throw new Error("관리자 로그인 정보가 없습니다. 다시 로그인해 주세요.");
       }
 
       const expiresAt = Number(stored.auth.expires_at || 0);
@@ -242,354 +331,481 @@
 
     async function supabaseRest(path, options = {}, retry = true) {
       const stored = await getValidStoredSession();
-      const token = stored.auth.access_token;
-
       const response = await fetch(`${window.SUPABASE_URL}/rest/v1/${path}`, {
         ...options,
         headers: {
           "Content-Type": "application/json",
           apikey: window.SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${stored.auth.access_token}`,
           ...(options.headers || {})
         }
       });
 
       const text = await response.text();
       const data = text ? JSON.parse(text) : null;
+
       if (!response.ok) {
         const message = data?.message || data?.msg || response.statusText;
         if (retry && /jwt expired/i.test(message)) {
           await refreshStoredSession(stored);
           return supabaseRest(path, options, false);
         }
-        throw new Error(data?.message || data?.msg || response.statusText);
+        throw new Error(message);
       }
+
       return data;
     }
 
-    function escapeDirectHtml(value) {
-      return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+    function redirectToLogin(message) {
+      const params = new URLSearchParams({
+        redirect: "assignment.html",
+        role: "admin",
+        message
+      });
+      window.location.href = `index.html?${params.toString()}`;
     }
 
-    function formatDirectDate(value) {
-      if (!value) {
-        return "-";
-      }
+    function formatDate(value) {
+      if (!value) return "-";
       return new Date(`${value}T00:00:00`).toLocaleDateString("ko-KR");
     }
 
-    function renderDirectRequests(requests, clients) {
-      const table = document.getElementById("requestsTable");
-      const requestSelect = document.getElementById("assignmentRequestSelect");
-      const clientMap = new Map(clients.map((client) => [client.id, client]));
-      window.latestDirectRequests = requests || [];
-      window.latestDirectClients = clients || [];
-
-      if (table) {
-        if (requests.length === 0) {
-          table.innerHTML = '<tr><td colspan="6" class="empty-row">등록된 요청이 없습니다.</td></tr>';
-        } else {
-          table.innerHTML = requests
-            .map((request) => {
-              const client = clientMap.get(request.client_id);
-              return `
-                <tr>
-                  <td>${escapeDirectHtml(client?.name || "-")}</td>
-                  <td>${escapeDirectHtml(request.contact_method || "-")}</td>
-                  <td>${Number(request.headcount || 0)}명</td>
-                  <td>${escapeDirectHtml(request.site_location || "-")}</td>
-                  <td>${formatDirectDate(request.work_date)}</td>
-                  <td><span class="status-pill">${escapeDirectHtml(request.status || "대기")}</span></td>
-                </tr>
-              `;
-            })
-            .join("");
-        }
-      }
-
-      if (requestSelect) {
-        requestSelect.innerHTML = requests.length
-          ? requests
-              .map((request) => {
-                const client = clientMap.get(request.client_id);
-                return `<option value="${request.id}">${escapeDirectHtml(client?.name || "-")} / ${escapeDirectHtml(request.site_location || "-")} / ${Number(request.headcount || 0)}명</option>`;
-              })
-              .join("")
-          : '<option value="">요청이 없습니다</option>';
-      }
+    function getAssignedCount(requestId) {
+      return state.assignments.filter((assignment) => assignment.request_id === requestId).length;
     }
 
-    function renderDirectWorkers(workers) {
-      const chips = document.getElementById("workerChips");
-      const workerSelect = document.getElementById("assignmentWorkerSelect");
-      const workerPicker = document.getElementById("directWorkerPicker");
-      window.latestDirectWorkers = workers || [];
-
-      if (chips) {
-        chips.innerHTML = workers.length
-          ? workers
-              .map((worker) => `<span class="chip">${escapeDirectHtml(worker.name)} · ${escapeDirectHtml(worker.phone || "연락처 없음")}</span>`)
-              .join("")
-          : '<p class="empty">등록된 인력이 없습니다.</p>';
-      }
-
-      if (workerSelect) {
-        workerSelect.innerHTML = workers.length
-          ? workers
-              .map((worker) => `<option value="${worker.id}" data-name="${escapeDirectHtml(worker.name)}" data-phone="${escapeDirectHtml(worker.phone || "")}">${escapeDirectHtml(worker.name)} (${escapeDirectHtml(worker.phone || "연락처 없음")})</option>`)
-              .join("")
-          : '<option value="">인력이 없습니다</option>';
-      }
-
-      if (workerPicker) {
-        workerPicker.innerHTML = workers.length
-          ? workers
-              .map((worker) => `
-                <label class="direct-worker-option">
-                  <input type="checkbox" name="directWorkerIds" value="${escapeDirectHtml(worker.id)}" />
-                  <span>${escapeDirectHtml(worker.name)} (${escapeDirectHtml(worker.phone || "연락처 없음")})</span>
-                </label>
-              `)
-              .join("")
-          : '<p class="empty">등록된 인력이 없습니다.</p>';
-      }
+    function buildRequestStatus(request, assignedCount = getAssignedCount(request.id)) {
+      const headcount = Number(request.headcount || 0);
+      if (headcount > 0 && assignedCount >= headcount) return "배치완료";
+      if (assignedCount > 0) return `${assignedCount}/${headcount}명 배치중`;
+      return "대기";
     }
 
-    function normalizeDirectText(value) {
-      return String(value || "").replace(/\s+/g, "").trim();
+    function statusClass(status) {
+      if (status === "배치완료") return "complete";
+      if (String(status || "").includes("배치중")) return "progress";
+      return "waiting";
     }
 
-    function readSelectedWorkerOption(option) {
-      const text = option.textContent || "";
-      const textMatch = text.match(/^(.*?)\s*\((.*?)\)\s*$/);
-      return {
-        id: option.value,
-        index: option.index,
-        name: option.dataset.name || textMatch?.[1] || text,
-        phone: option.dataset.phone || (textMatch?.[2] === "연락처 없음" ? "" : textMatch?.[2]) || ""
-      };
-    }
-
-    function resolveWorkerIdFromFreshList(selected, workers) {
-      const matchedByNameAndPhone = (workers || []).find(
-        (worker) =>
-          normalizeDirectText(worker.name) === normalizeDirectText(selected.name)
-          && normalizeDirectText(worker.phone) === normalizeDirectText(selected.phone)
-      );
-      if (matchedByNameAndPhone?.id) {
-        return matchedByNameAndPhone.id;
-      }
-
-      const matchedByIndex = Number.isInteger(selected.index) ? workers?.[selected.index] : null;
-      return matchedByIndex?.id || "";
-    }
-
-    function renderDirectAssignments(assignments, requests, clients, workers) {
-      const assignmentList = document.getElementById("assignmentList");
-      if (!assignmentList) {
+    function renderSession() {
+      if (!state.profile) {
+        sessionBar.innerHTML = `<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>`;
         return;
       }
 
-      const requestMap = new Map(requests.map((request) => [request.id, request]));
-      const clientMap = new Map(clients.map((client) => [client.id, client]));
-      const workerMap = new Map(workers.map((worker) => [worker.id, worker]));
-      const grouped = new Map();
+      sessionBar.innerHTML = `
+        <span><strong>${escapeHtml(state.profile.name)}</strong> · 관리자 · ${escapeHtml(state.profile.login_id || "")}</span>
+        <span class="session-actions">
+          <a class="session-link" href="main.html">메인</a>
+          <a class="session-link" href="assignment-history.html">배치내역</a>
+        </span>
+      `;
+    }
 
-      assignments.forEach((assignment) => {
-        if (!grouped.has(assignment.request_id)) {
-          grouped.set(assignment.request_id, []);
-        }
-        grouped.get(assignment.request_id).push(assignment);
-      });
-
-      if (grouped.size === 0) {
-        assignmentList.innerHTML = '<p class="empty">아직 배정된 내역이 없습니다.</p>';
+    function renderRequests() {
+      if (state.requests.length === 0) {
+        requestsTable.innerHTML = '<tr><td colspan="6" class="empty">등록된 현장 요청이 없습니다.</td></tr>';
         return;
       }
 
-      assignmentList.innerHTML = Array.from(grouped.entries())
-        .map(([requestId, requestAssignments]) => {
-          const request = requestMap.get(requestId);
-          const client = clientMap.get(request?.client_id);
-          const assignedWorkers = requestAssignments
-            .map((assignment) => workerMap.get(assignment.worker_id))
-            .filter(Boolean);
-          const assignedCount = requestAssignments.length;
-
+      const clientMap = new Map(state.clients.map((client) => [client.id, client]));
+      requestsTable.innerHTML = state.requests
+        .map((request) => {
+          const client = clientMap.get(request.client_id);
+          const assignedCount = getAssignedCount(request.id);
+          const status = buildRequestStatus(request, assignedCount);
           return `
-            <article class="assignment-card">
-              <div class="assignment-card-header">
-                <h3>${escapeDirectHtml(client?.name || "-")}</h3>
-                <span class="badge">${assignedCount}/${Number(request?.headcount || 0)}명</span>
-              </div>
-              <p class="assignment-meta">${escapeDirectHtml(request?.site_location || "-")} · ${formatDirectDate(request?.work_date)}</p>
-              <div class="assigned-workers">
-                ${
-                  assignedWorkers.length
-                    ? assignedWorkers
-                        .map((worker) => `<span class="worker-tag">${escapeDirectHtml(worker.name)} · ${escapeDirectHtml(worker.phone || "연락처 없음")}</span>`)
-                        .join("")
-                    : requestAssignments
-                        .map((assignment) => `<span class="worker-tag">배정 완료 · ${escapeDirectHtml(String(assignment.worker_id || "").slice(0, 8))}</span>`)
-                        .join("")
-                }
-              </div>
-            </article>
+            <tr>
+              <td>${escapeHtml(client?.name || "-")}</td>
+              <td>${escapeHtml(formatContactMethod(request.contact_method))}</td>
+              <td>${assignedCount}/${Number(request.headcount || 0)}명</td>
+              <td>${escapeHtml(request.site_location || "-")}</td>
+              <td>${formatDate(request.work_date)}</td>
+              <td><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></td>
+            </tr>
           `;
         })
         .join("");
     }
 
-    function renderSavedAssignmentsOnly(assignments, requestId, workerIds) {
-      const assignmentList = document.getElementById("assignmentList");
-      if (!assignmentList) {
+    function renderWorkers() {
+      const visibleWorkers = buildVisibleWorkers();
+
+      if (visibleWorkers.length === 0) {
+        workerChips.innerHTML = '<p class="empty">등록된 인력이 없습니다.</p>';
+        workerPicker.innerHTML = '<p class="empty">등록된 인력이 없습니다.</p>';
         return;
       }
 
-      const requests = window.latestDirectRequests || [];
-      const clients = window.latestDirectClients || [];
-      const workers = window.latestDirectWorkers || [];
-      const request = requests.find((item) => item.id === requestId);
-      const client = clients.find((item) => item.id === request?.client_id);
-      const selectedWorkers = workers.filter((worker) => workerIds.includes(worker.id));
-      const assignedCount = Math.max(workerIds.length, assignments?.length || 0);
-      const savedAssignments = assignments?.length
-        ? assignments
-        : workerIds.map((workerId) => ({ request_id: requestId, worker_id: workerId }));
+      workerChips.innerHTML = visibleWorkers
+        .map((worker) => `<span class="chip">${escapeHtml(worker.name)} · ${escapeHtml(worker.phone || "연락처 없음")}</span>`)
+        .join("");
 
-      renderDirectAssignments(savedAssignments, requests, clients, workers);
+      workerPicker.innerHTML = visibleWorkers
+        .map((worker) => `
+          <label class="direct-worker-option">
+            <input
+              type="checkbox"
+              name="workerIds"
+              data-raw-name="${escapeHtml(worker.name || "")}"
+              data-raw-phone="${escapeHtml(worker.phone || "")}"
+              data-profile-id="${escapeHtml(worker.profileId || "")}"
+              data-worker-record-id="${escapeHtml(worker.workerRecordId || "")}"
+            />
+            <span>${escapeHtml(worker.name)} (${escapeHtml(worker.phone || "연락처 없음")})</span>
+          </label>
+        `)
+        .join("");
+    }
 
-      if (assignmentList.textContent.includes("아직 배정된 내역이 없습니다")) {
-        assignmentList.innerHTML = `
-          <article class="assignment-card">
-            <div class="assignment-card-header">
-              <h3>${escapeDirectHtml(client?.name || "-")}</h3>
-              <span class="badge">${assignedCount}/${Number(request?.headcount || 0)}명</span>
-            </div>
-            <p class="assignment-meta">${escapeDirectHtml(request?.site_location || "-")} · ${formatDirectDate(request?.work_date)}</p>
-            <div class="assigned-workers">
-              ${
-                selectedWorkers.length
-                  ? selectedWorkers
-                      .map((worker) => `<span class="worker-tag">${escapeDirectHtml(worker.name)} · ${escapeDirectHtml(worker.phone || "연락처 없음")}</span>`)
-                      .join("")
-                  : '<span class="worker-tag">저장된 인력</span>'
-              }
-            </div>
-          </article>
-        `;
+    function renderRequestOptions() {
+      if (state.requests.length === 0) {
+        requestSelect.innerHTML = '<option value="">현장 요청이 없습니다.</option>';
+        return;
+      }
+
+      const clientMap = new Map(state.clients.map((client) => [client.id, client]));
+      requestSelect.innerHTML = state.requests
+        .map((request) => {
+          const client = clientMap.get(request.client_id);
+          const status = buildRequestStatus(request);
+          return `
+            <option value="${request.id}">
+              [${status}] ${escapeHtml(client?.name || "-")} / ${escapeHtml(request.site_location || "-")} / ${Number(request.headcount || 0)}명
+            </option>
+          `;
+        })
+        .join("");
+    }
+
+    async function loadWorkerProfiles() {
+      return supabaseRest("profiles?select=id,role,name,phone,worker_id,login_id&role=eq.worker&order=created_at.desc");
+    }
+
+    async function reconcileWorkerProfiles(profiles) {
+      let changed = false;
+      const reconciledProfiles = [];
+
+      for (const profile of profiles || []) {
+        try {
+          const reconciled = await ensureWorkerBridge(profile, {
+            rawName: profile.name || "",
+            rawPhone: profile.phone || "",
+            name: normalizeText(profile.name || ""),
+            phone: normalizePhone(profile.phone || "")
+          });
+
+          if (reconciled.worker_id !== profile.worker_id
+            || reconciled.name !== profile.name
+            || normalizePhone(reconciled.phone) !== normalizePhone(profile.phone)) {
+            changed = true;
+          }
+
+          reconciledProfiles.push(reconciled);
+        } catch (error) {
+          reconciledProfiles.push(profile);
+        }
+      }
+
+      return {
+        profiles: reconciledProfiles,
+        changed
+      };
+    }
+
+    async function loadDashboard() {
+      const [clients, requests, workers, workerProfiles, assignments] = await Promise.all([
+        supabaseRest("clients?select=*&order=name.asc"),
+        supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc"),
+        supabaseRest("workers?select=*&order=created_at.desc"),
+        loadWorkerProfiles(),
+        supabaseRest("assignments?select=*&order=created_at.desc")
+      ]);
+
+      const reconciled = await reconcileWorkerProfiles(workerProfiles || []);
+      const latestWorkers = reconciled.changed
+        ? await supabaseRest("workers?select=*&order=created_at.desc")
+        : workers;
+
+      state.clients = clients || [];
+      state.requests = requests || [];
+      state.workers = latestWorkers || [];
+      state.workerProfiles = reconciled.profiles || [];
+      state.assignments = assignments || [];
+
+      renderRequests();
+      renderWorkers();
+      renderRequestOptions();
+    }
+
+    async function upsertRequestStatus(requestId) {
+      const request = state.requests.find((item) => item.id === requestId);
+      if (!request) return;
+
+      const currentAssignments = await supabaseRest(`assignments?select=id,worker_id&request_id=eq.${requestId}`);
+      const nextStatus = buildRequestStatus(request, currentAssignments.length);
+
+      await supabaseRest(`job_requests?id=eq.${requestId}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ status: nextStatus })
+      });
+
+      if (currentAssignments.length > 0) {
+        await supabaseRest("work_logs?on_conflict=assignment_id", {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify(
+            currentAssignments.map((assignment) => ({
+              assignment_id: assignment.id,
+              worker_id: assignment.worker_id
+            }))
+          )
+        });
       }
     }
 
-    window.directLoadAssignments = async function directLoadAssignments() {
-      const stored = getStoredSession();
-      if (!stored?.profile?.id || stored.profile.role !== "admin") {
-        return;
+    function readCheckedWorkers() {
+      return Array.from(document.querySelectorAll("#directWorkerPicker input[name='workerIds']:checked"))
+        .map((input) => ({
+          rawName: String(input.dataset.rawName || "").trim(),
+          rawPhone: String(input.dataset.rawPhone || "").trim(),
+          name: normalizeText(input.dataset.rawName || ""),
+          phone: normalizePhone(input.dataset.rawPhone || ""),
+          profileId: String(input.dataset.profileId || "").trim(),
+          workerRecordId: String(input.dataset.workerRecordId || "").trim()
+        }))
+        .filter((worker) => worker.name || worker.phone);
+    }
+
+    function findWorkerProfileByIdentity(profiles, selectedWorker) {
+      const targetPhone = selectedWorker.phone || normalizePhone(selectedWorker.rawPhone);
+      const targetName = selectedWorker.name || normalizeText(selectedWorker.rawName);
+
+      if (targetPhone) {
+        const byPhone = (profiles || []).find((profile) => normalizePhone(profile.phone) === targetPhone);
+        if (byPhone) return byPhone;
       }
 
-      try {
-        const [clients, requests, workers, assignments] = await Promise.all([
-          supabaseRest("clients?select=*&order=name.asc"),
-          supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc"),
-          supabaseRest("workers?select=*&order=name.asc"),
-          supabaseRest("assignments?select=*&order=created_at.desc")
-        ]);
-        const assignmentList = document.getElementById("assignmentList");
-        if ((!assignments || assignments.length === 0) && assignmentList?.querySelector(".assignment-card")) {
-          return [];
-        }
-        renderDirectAssignments(assignments || [], requests || [], clients || [], workers || []);
-        return assignments || [];
-      } catch (error) {
-        setRequestMessage(`배정 내역 불러오기 실패: ${error.message}`);
-        return [];
-      }
-    };
-
-    window.directLoadWorkers = async function directLoadWorkers() {
-      const stored = getStoredSession();
-      if (!stored?.profile?.id || stored.profile.role !== "admin") {
-        return;
+      if (targetName) {
+        return (profiles || []).find((profile) => normalizeText(profile.name) === targetName) || null;
       }
 
-      try {
-        const workers = await supabaseRest("workers?select=*&order=name.asc");
-        renderDirectWorkers(workers || []);
-      } catch (error) {
-        setRequestMessage(`인력 목록 불러오기 실패: ${error.message}`);
+      return null;
+    }
+
+    function buildWorkerLoginId(selectedWorker) {
+      const phonePart = (selectedWorker.phone || normalizePhone(selectedWorker.rawPhone) || Date.now().toString()).slice(-8);
+      const timePart = Date.now().toString().slice(-6);
+      return `worker_${phonePart}_${timePart}`;
+    }
+
+    function signupEmail(loginId) {
+      const safeId = String(loginId || "").trim().toLowerCase().replace(/[^a-z0-9._-]/g, "_");
+      return `${safeId}@yangpyeongsafety.app`;
+    }
+
+    function buildWorkerPassword() {
+      return `Worker!${Math.random().toString(36).slice(2, 10)}${Date.now().toString().slice(-4)}`;
+    }
+
+    function preferredWorkerName(profile, selectedWorker) {
+      if (!isPlaceholderName(selectedWorker?.rawName)) {
+        return selectedWorker.rawName;
       }
-    };
+      if (!isPlaceholderName(profile?.name)) {
+        return profile.name;
+      }
+      return "작업자";
+    }
 
-    window.directLoadRequests = async function directLoadRequests() {
-      const stored = getStoredSession();
-      if (!stored?.profile?.id || stored.profile.role !== "admin") {
-        return;
+    async function ensureWorkerBridge(profile, selectedWorker) {
+      const bridgeId = profile.id;
+      const bridgeName = preferredWorkerName(profile, selectedWorker);
+      const bridgePhone = selectedWorker.rawPhone || profile.phone || null;
+
+      const existingWorker = await supabaseRest(`workers?select=id,name,phone&id=eq.${bridgeId}`);
+      if (!existingWorker?.[0]?.id) {
+        await supabaseRest("workers", {
+          method: "POST",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify({
+            id: bridgeId,
+            name: bridgeName,
+            phone: bridgePhone
+          })
+        });
+      } else if (
+        (isPlaceholderName(existingWorker[0].name) && !isPlaceholderName(bridgeName))
+        || (bridgePhone && normalizePhone(existingWorker[0].phone) !== normalizePhone(bridgePhone))
+      ) {
+        await supabaseRest(`workers?id=eq.${bridgeId}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            name: bridgeName,
+            phone: bridgePhone
+          })
+        });
       }
 
-      try {
-        const [clients, requests] = await Promise.all([
-          supabaseRest("clients?select=*&order=name.asc"),
-          supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc")
-        ]);
-        renderDirectRequests(requests || [], clients || []);
-      } catch (error) {
-        setRequestMessage(`신청 내역 불러오기 실패: ${error.message}`);
+      const profilePatch = {};
+      if (profile.worker_id !== bridgeId) {
+        profilePatch.worker_id = bridgeId;
       }
-    };
-
-    window.directRequestSubmit = async function directRequestSubmit(event) {
-      if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
+      if (isPlaceholderName(profile.name) && !isPlaceholderName(bridgeName)) {
+        profilePatch.name = bridgeName;
+      }
+      if (bridgePhone && normalizePhone(profile.phone) !== normalizePhone(bridgePhone)) {
+        profilePatch.phone = bridgePhone;
       }
 
-      setRequestMessage("버튼 클릭 확인. 요청을 저장하는 중입니다...", false);
-
-      const stored = getStoredSession();
-      if (!stored?.profile?.id || stored.profile.role !== "admin") {
-        setRequestMessage("관리자 로그인 세션이 없습니다. 다시 로그인해 주세요.");
-        return false;
+      if (Object.keys(profilePatch).length > 0) {
+        await supabaseRest(`profiles?id=eq.${profile.id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify(profilePatch)
+        });
+        return {
+          ...profile,
+          ...profilePatch
+        };
       }
 
-      const formData = new FormData(requestFormDirect);
+      return {
+        ...profile,
+        worker_id: bridgeId,
+        name: !isPlaceholderName(profile.name) ? profile.name : bridgeName,
+        phone: profile.phone || bridgePhone || ""
+      };
+    }
+
+    async function waitForWorkerProfile(profileId, selectedWorker) {
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const profiles = await loadWorkerProfiles();
+        state.workerProfiles = profiles || [];
+
+        const byId = (state.workerProfiles || []).find((profile) => profile.id === profileId);
+        if (byId?.id) return byId;
+
+        const byIdentity = findWorkerProfileByIdentity(state.workerProfiles, selectedWorker);
+        if (byIdentity?.id) return byIdentity;
+
+        await sleep(300);
+      }
+
+      return null;
+    }
+
+    async function createWorkerProfile(selectedWorker) {
+      const loginId = buildWorkerLoginId(selectedWorker);
+      const response = await fetch(`${window.SUPABASE_URL}/auth/v1/signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+          email: signupEmail(loginId),
+          password: buildWorkerPassword(),
+          data: {
+            login_id: loginId,
+            role: "worker",
+            name: selectedWorker.rawName || selectedWorker.name || "작업자",
+            phone: selectedWorker.rawPhone || ""
+          }
+        })
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.msg || result?.message || "작업자 계정을 만들지 못했습니다.");
+      }
+
+      const profileId = result?.user?.id;
+      if (!profileId) {
+        throw new Error("작업자 프로필 생성 결과를 확인할 수 없습니다.");
+      }
+
+      const profile = await waitForWorkerProfile(profileId, selectedWorker);
+      if (!profile?.id) {
+        throw new Error("작업자 프로필 연결이 완료되지 않았습니다.");
+      }
+
+      return ensureWorkerBridge(profile, selectedWorker);
+    }
+
+    async function ensureWorkerProfile(selectedWorker) {
+      if (selectedWorker.profileId) {
+        const verified = await supabaseRest(
+          `profiles?select=id,role,name,phone,worker_id,login_id&id=eq.${selectedWorker.profileId}`
+        );
+        if (verified?.[0]?.id) return ensureWorkerBridge(verified[0], selectedWorker);
+      }
+
+      const latestProfiles = await loadWorkerProfiles();
+      state.workerProfiles = latestProfiles || [];
+
+      const matchedProfile = findWorkerProfileByIdentity(state.workerProfiles, selectedWorker);
+      if (matchedProfile?.id) return ensureWorkerBridge(matchedProfile, selectedWorker);
+
+      return createWorkerProfile(selectedWorker);
+    }
+
+    async function insertAssignmentRow(requestId, workerProfileId, createdBy) {
+      await supabaseRest("assignments?on_conflict=request_id,worker_id", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify({
+          request_id: requestId,
+          worker_id: workerProfileId,
+          created_by: createdBy
+        })
+      });
+    }
+
+    async function saveAssignmentsSequentially(requestId, selectedWorkers, createdBy) {
+      for (const selectedWorker of selectedWorkers) {
+        const workerProfile = await ensureWorkerProfile(selectedWorker);
+        await insertAssignmentRow(requestId, workerProfile.id, createdBy);
+      }
+    }
+
+    async function handleRequestSubmit(event) {
+      event.preventDefault();
+      const stored = await getValidStoredSession();
+      const formData = new FormData(requestForm);
       const clientName = String(formData.get("clientName") || "").trim();
       const contactMethod = String(formData.get("contactMethod") || "").trim();
-      const headcount = Number(formData.get("headcount"));
+      const headcount = Number(formData.get("headcount") || 0);
       const siteLocation = String(formData.get("siteLocation") || "").trim();
       const workDate = String(formData.get("workDate") || "").trim();
 
-      if (!clientName || !contactMethod || !headcount || !siteLocation || !workDate) {
-        setRequestMessage("거래처명, 연락 방식, 요청 인원, 현장 위치, 근무일을 모두 입력해 주세요.");
-        return false;
+      if (!clientName || !contactMethod || headcount <= 0 || !siteLocation || !workDate) {
+        setMessage("현장 요청 항목을 모두 입력해 주세요.");
+        return;
       }
 
       try {
+        setMessage("현장 요청을 저장하는 중입니다...", false);
+
         const clients = await supabaseRest("clients?on_conflict=name", {
           method: "POST",
-          headers: {
-            Prefer: "resolution=merge-duplicates,return=representation"
-          },
+          headers: { Prefer: "resolution=merge-duplicates,return=representation" },
           body: JSON.stringify({
             name: clientName,
             created_by: stored.profile.id
           })
         });
+
         const client = clients?.[0];
         if (!client?.id) {
-          throw new Error("거래처 저장 결과를 확인하지 못했습니다.");
+          throw new Error("업체 정보를 저장하지 못했습니다.");
         }
 
         await supabaseRest("job_requests", {
           method: "POST",
-          headers: {
-            Prefer: "return=representation"
-          },
+          headers: { Prefer: "return=representation" },
           body: JSON.stringify({
             client_id: client.id,
             contact_method: contactMethod,
@@ -601,218 +817,119 @@
           })
         });
 
-        requestFormDirect.reset();
-        await window.directLoadRequests();
-        setRequestMessage("요청이 등록됐습니다. 아래 신청 내역에 바로 반영됐습니다.", false);
+        requestForm.reset();
+        await loadDashboard();
+        setMessage("현장 요청이 저장되었습니다.", false);
       } catch (error) {
-        setRequestMessage(`요청 등록 실패: ${error.message}`);
+        setMessage(`현장 요청 저장 실패: ${error.message}`);
       }
+    }
 
-      return false;
-    };
-
-    window.directWorkerSubmit = async function directWorkerSubmit(event) {
-      if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-      }
-
-      setRequestMessage("인력 추가 버튼 클릭 확인. 저장하는 중입니다...", false);
-
-      const stored = getStoredSession();
-      if (!stored?.profile?.id || stored.profile.role !== "admin") {
-        setRequestMessage("관리자 로그인 세션이 없습니다. 다시 로그인해 주세요.");
-        return false;
-      }
-
-      const formData = new FormData(workerFormDirect);
+    async function handleWorkerSubmit(event) {
+      event.preventDefault();
+      const formData = new FormData(workerForm);
       const name = String(formData.get("name") || "").trim();
       const phone = String(formData.get("phone") || "").trim();
 
       if (!name || !phone) {
-        setRequestMessage("인력 이름과 연락처를 모두 입력해 주세요.");
-        return false;
+        setMessage("인력 이름과 연락처를 모두 입력해 주세요.");
+        return;
+      }
+
+      const visibleWorkers = buildVisibleWorkers();
+      const identity = {
+        rawName: name,
+        rawPhone: phone,
+        name: normalizeText(name),
+        phone: normalizePhone(phone)
+      };
+
+      const existing = visibleWorkers.find((worker) => identityKey(worker) === identityKey(identity));
+      if (existing?.profileId) {
+        setMessage("이미 등록된 인력입니다.");
+        return;
       }
 
       try {
-        await supabaseRest("workers", {
-          method: "POST",
-          headers: {
-            Prefer: "return=representation"
-          },
-          body: JSON.stringify({ name, phone })
+        setMessage(existing ? "기존 인력 계정을 연결하는 중입니다..." : "인력 계정을 만드는 중입니다...", false);
+
+        await ensureWorkerProfile({
+          rawName: existing?.name || name,
+          rawPhone: existing?.phone || phone,
+          name: normalizeText(existing?.name || name),
+          phone: normalizePhone(existing?.phone || phone),
+          profileId: existing?.profileId || ""
         });
 
-        workerFormDirect.reset();
-        await window.directLoadWorkers();
-        setRequestMessage("인력이 추가됐습니다. 아래 인력 목록과 배정 선택에 바로 반영됐습니다.", false);
+        workerForm.reset();
+        await loadDashboard();
+        setMessage(existing ? "기존 인력을 배정 가능한 계정으로 연결했습니다." : "인력이 등록되었습니다.", false);
       } catch (error) {
-        setRequestMessage(`인력 추가 실패: ${error.message}`);
+        setMessage(`인력 등록 실패: ${error.message}`);
       }
+    }
 
-      return false;
-    };
+    async function handleAssignmentSubmit(event) {
+      event.preventDefault();
+      const stored = await getValidStoredSession();
+      const requestId = String(new FormData(assignmentForm).get("requestId") || "").trim();
+      const selectedWorkers = readCheckedWorkers();
 
-    window.directAssignmentSubmit = async function directAssignmentSubmit(event) {
-      if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-      }
-
-      setRequestMessage("배정 저장 버튼 클릭 확인. 저장하는 중입니다...", false);
-
-      const stored = getStoredSession();
-      if (!stored?.profile?.id || stored.profile.role !== "admin") {
-        setRequestMessage("관리자 로그인 세션이 없습니다. 다시 로그인해 주세요.");
-        return false;
-      }
-
-      const requestId = String(new FormData(assignmentFormDirect).get("requestId") || "").trim();
-      const workerSelect = document.getElementById("assignmentWorkerSelect");
-      const checkedWorkerIds = Array.from(document.querySelectorAll("#directWorkerPicker input[name='directWorkerIds']:checked"))
-        .map((input) => input.value)
-        .filter(Boolean);
-      const selectedWorkerOptions = Array.from(workerSelect?.selectedOptions || []).map(readSelectedWorkerOption);
-
-      if (!requestId || (checkedWorkerIds.length === 0 && selectedWorkerOptions.length === 0)) {
-        setRequestMessage("배정할 요청과 인력을 선택해 주세요.");
-        return false;
+      if (!requestId || selectedWorkers.length === 0) {
+        setMessage("현장 요청과 배정 인력을 선택해 주세요.");
+        return;
       }
 
       try {
-        const [currentRequests, currentWorkers] = await Promise.all([
-          supabaseRest("job_requests?select=id"),
-          supabaseRest("workers?select=id,name,phone&order=name.asc")
-        ]);
-        const validRequestIds = new Set((currentRequests || []).map((request) => request.id));
-        const currentWorkerIds = new Set((currentWorkers || []).map((worker) => worker.id));
-        const resolvedWorkerIds = checkedWorkerIds.length > 0
-          ? checkedWorkerIds.filter((workerId) => currentWorkerIds.has(workerId))
-          : selectedWorkerOptions
-              .map((selected) => resolveWorkerIdFromFreshList(selected, currentWorkers || []))
-              .filter(Boolean);
-        const uniqueWorkerIds = [...new Set(resolvedWorkerIds)];
+        setMessage("배정을 저장하는 중입니다...", false);
 
+        const latestRequests = await supabaseRest("job_requests?select=id");
+        const validRequestIds = new Set((latestRequests || []).map((request) => request.id));
         if (!validRequestIds.has(requestId)) {
-          await window.directLoadRequests();
-          setRequestMessage("선택한 요청이 DB에 없습니다. 요청 목록을 새로 불러왔으니 다시 선택해 주세요.");
-          return false;
+          await loadDashboard();
+          setMessage("선택한 현장 요청을 찾을 수 없습니다. 다시 불러온 뒤 시도해 주세요.");
+          return;
         }
 
-        const expectedWorkerCount = checkedWorkerIds.length || selectedWorkerOptions.length;
-        if (uniqueWorkerIds.length !== expectedWorkerCount) {
-          renderDirectWorkers(currentWorkers || []);
-          setRequestMessage("선택한 인력을 DB의 최신 인력 목록과 연결하지 못했습니다. 새로 표시된 체크박스에서 다시 선택해 주세요.");
-          return false;
-        }
+        await saveAssignmentsSequentially(requestId, selectedWorkers, stored.profile.id);
+        await upsertRequestStatus(requestId);
 
-        const rows = uniqueWorkerIds.map((workerId) => ({
-          request_id: requestId,
-          worker_id: workerId,
-          created_by: stored.profile.id
-        }));
+        assignmentForm.reset();
+        await loadDashboard();
 
-        const insertedAssignments = await supabaseRest("assignments?on_conflict=request_id,worker_id", {
-          method: "POST",
-          headers: {
-            Prefer: "resolution=merge-duplicates,return=representation"
-          },
-          body: JSON.stringify(rows)
-        });
-
-        const currentAssignments = await supabaseRest(`assignments?select=*&request_id=eq.${requestId}`);
-        await supabaseRest(`job_requests?id=eq.${requestId}`, {
-          method: "PATCH",
-          headers: {
-            Prefer: "return=minimal"
-          },
-          body: JSON.stringify({
-            status: `${currentAssignments.length}명 배정`
-          })
-        });
-
-        assignmentFormDirect.reset();
-        const [clients, requests, workers, loadedAssignments] = await Promise.all([
-          supabaseRest("clients?select=*&order=name.asc"),
-          supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc"),
-          supabaseRest("workers?select=*&order=name.asc"),
-          supabaseRest("assignments?select=*&order=created_at.desc")
-        ]);
-        const visibleAssignments = loadedAssignments?.length ? loadedAssignments : insertedAssignments;
-        renderDirectRequests(requests || [], clients || []);
-        renderDirectWorkers(workers || []);
-        renderDirectAssignments(visibleAssignments || [], requests || [], clients || [], workers || []);
-        renderSavedAssignmentsOnly(visibleAssignments || [], requestId, uniqueWorkerIds);
-        setRequestMessage("배정이 저장됐습니다. 하단 배정 내역에 바로 반영됐습니다.", false);
+        const request = state.requests.find((item) => item.id === requestId);
+        const assignedCount = getAssignedCount(requestId);
+        const status = request ? buildRequestStatus(request, assignedCount) : "배치완료";
+        setMessage(`배정이 저장되었습니다. 현재 상태: ${status}`, false);
       } catch (error) {
-        if (error.message.includes("assignments_worker_id_fkey")) {
-          try {
-            const freshWorkers = await supabaseRest("workers?select=id,name,phone&order=name.asc");
-            const retryWorkerIds = selectedWorkerOptions
-              .map((selected) => resolveWorkerIdFromFreshList(selected, freshWorkers || []))
-              .filter(Boolean);
-            const uniqueRetryWorkerIds = [...new Set(retryWorkerIds)];
-
-            if (uniqueRetryWorkerIds.length === selectedWorkerOptions.length) {
-              const retryInsertedAssignments = await supabaseRest("assignments?on_conflict=request_id,worker_id", {
-                method: "POST",
-                headers: {
-                  Prefer: "resolution=merge-duplicates,return=representation"
-                },
-                body: JSON.stringify(uniqueRetryWorkerIds.map((workerId) => ({
-                  request_id: requestId,
-                  worker_id: workerId,
-                  created_by: stored.profile.id
-                })))
-              });
-
-              assignmentFormDirect.reset();
-              const [clients, requests, workers, loadedAssignments] = await Promise.all([
-                supabaseRest("clients?select=*&order=name.asc"),
-                supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc"),
-                supabaseRest("workers?select=*&order=name.asc"),
-                supabaseRest("assignments?select=*&order=created_at.desc")
-              ]);
-              const visibleAssignments = loadedAssignments?.length ? loadedAssignments : retryInsertedAssignments;
-              renderDirectRequests(requests || [], clients || []);
-              renderDirectWorkers(workers || []);
-              renderDirectAssignments(visibleAssignments || [], requests || [], clients || [], workers || []);
-              renderSavedAssignmentsOnly(visibleAssignments || [], requestId, uniqueRetryWorkerIds);
-              setRequestMessage("배정이 저장됐습니다. 오래된 인력 ID는 최신 DB 인력으로 자동 연결했습니다.", false);
-              return false;
-            }
-          } catch (retryError) {
-            console.error(retryError);
-          }
-
-          await window.directLoadWorkers();
-          setRequestMessage("선택한 인력 ID가 DB와 맞지 않아 인력 목록을 새로 불러왔습니다. 다시 선택해서 저장해 주세요.");
-          return false;
-        }
-        setRequestMessage(`배정 저장 실패: ${error.message}`);
+        await loadDashboard().catch(() => {});
+        setMessage(`배정 저장 실패: ${error.message}`);
       }
+    }
 
-      return false;
-    };
+    async function bootstrap() {
+      try {
+        const stored = await getValidStoredSession();
+        if (stored.profile.role !== "admin") {
+          redirectToLogin("관리자 계정으로 로그인해 주세요.");
+          return;
+        }
 
-    window.addEventListener("load", () => {
-      window.directLoadRequests();
-      window.directLoadWorkers();
-      window.directLoadAssignments();
-    });
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=20260423-1"></script>
-  <script>
-    window.addEventListener("load", () => {
-      setTimeout(() => {
-        window.directLoadRequests?.();
-        window.directLoadWorkers?.();
-        window.directLoadAssignments?.();
-      }, 700);
-    });
+        state.profile = stored.profile;
+        renderSession();
+        setMessage("현장 배정 데이터를 불러오는 중입니다...", false);
+        await loadDashboard();
+        setMessage("현장 배정 페이지가 준비되었습니다.", false);
+      } catch (error) {
+        redirectToLogin(error.message);
+      }
+    }
+
+    requestForm.addEventListener("submit", handleRequestSubmit);
+    workerForm.addEventListener("submit", handleWorkerSubmit);
+    assignmentForm.addEventListener("submit", handleAssignmentSubmit);
+
+    bootstrap();
   </script>
 </body>
 </html>

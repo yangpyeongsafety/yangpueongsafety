@@ -12,30 +12,45 @@
   />
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body data-page="worker-entry" data-role="user">
+<body data-page="worker-entry" data-role="worker">
   <div class="app-shell">
     <div class="session-bar" id="sessionBar"></div>
+
     <header class="hero">
       <div>
-        <p class="eyebrow">WORKER ENTRY</p>
-        <h1>인력이 직접 근무시간을 입력합니다</h1>
-        <p class="hero-copy">시작시간, 종료시간, 휴게시간을 입력하면 실근무와 공수가 자동 계산됩니다.</p>
+        <p class="eyebrow">근무시간 입력</p>
+        <h1>내 배치 내역과 근무시간을 입력하세요</h1>
+        <p class="hero-copy">배정된 현장을 확인한 뒤 시작시간, 종료시간, 휴게시간을 입력하면 실근무시간과 공수가 자동 계산됩니다.</p>
       </div>
       <nav class="top-nav">
+        <a href="main.html">메인으로</a>
         <a class="ghost-btn" href="logout.html">로그아웃</a>
       </nav>
     </header>
 
     <main class="dashboard">
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">내 배치</p>
+            <h2>현재 배정된 현장</h2>
+          </div>
+        </div>
+        <div class="assignment-list" id="myAssignmentList"></div>
+      </section>
+
       <section class="panel panel-highlight">
         <div class="panel-header">
           <div>
-            <p class="section-kicker">WORK TIME</p>
-            <h2>근무시간 입력</h2>
+            <p class="section-kicker">근무 입력</p>
+            <h2>근무시간 등록</h2>
           </div>
         </div>
+
+        <p id="authMessage" class="auth-message"></p>
+
         <div class="worker-entry-layout">
-          <form id="manualEntryForm" class="stack-form">
+          <form id="manualEntryForm" class="stack-form" autocomplete="off">
             <label>
               내 배정 선택
               <select name="assignmentId" id="manualAssignmentSelect" required></select>
@@ -62,9 +77,9 @@
               <table>
                 <thead>
                   <tr>
-                    <th>인력명</th>
-                    <th>거래처</th>
-                    <th>근무일</th>
+                    <th>현장명</th>
+                    <th>작업일</th>
+                    <th>상태</th>
                     <th>실근무</th>
                     <th>공수</th>
                   </tr>
@@ -78,8 +93,595 @@
     </main>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="app.js?v=20260423-1"></script>
+  <script>
+    const sessionBar = document.getElementById("sessionBar");
+    const authMessage = document.getElementById("authMessage");
+    const myAssignmentList = document.getElementById("myAssignmentList");
+    const manualEntryForm = document.getElementById("manualEntryForm");
+    const manualAssignmentSelect = document.getElementById("manualAssignmentSelect");
+    const manualStartTime = document.getElementById("manualStartTime");
+    const manualEndTime = document.getElementById("manualEndTime");
+    const manualBreakMinutes = document.getElementById("manualBreakMinutes");
+    const manualPreview = document.getElementById("manualPreview");
+    const manualEntryTable = document.getElementById("manualEntryTable");
+
+    const state = {
+      profile: null,
+      requests: [],
+      assignments: [],
+      workLogs: [],
+      requestLoadError: "",
+      needsAssignmentSync: false
+    };
+
+    function setMessage(message, isError = true) {
+      authMessage.textContent = message;
+      authMessage.className = isError ? "auth-message error" : "auth-message success";
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function getStoredSession() {
+      try {
+        const raw = localStorage.getItem("workforce.session");
+        return raw ? JSON.parse(raw) : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function saveStoredSession(stored, auth) {
+      const authPayload = {
+        access_token: auth.access_token,
+        refresh_token: auth.refresh_token || stored.auth.refresh_token,
+        expires_in: auth.expires_in,
+        expires_at: Math.floor(Date.now() / 1000) + Number(auth.expires_in || 0),
+        token_type: auth.token_type,
+        user: auth.user || stored.auth.user
+      };
+      const nextStored = {
+        ...stored,
+        auth: authPayload
+      };
+
+      localStorage.setItem("workforce.session", JSON.stringify(nextStored));
+      localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify({
+        currentSession: authPayload,
+        expiresAt: authPayload.expires_at
+      }));
+
+      return nextStored;
+    }
+
+    async function refreshStoredSession(stored) {
+      const refreshToken = stored?.auth?.refresh_token;
+      if (!refreshToken) {
+        throw new Error("로그인 시간이 만료되었습니다. 다시 로그인해 주세요.");
+      }
+
+      const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        localStorage.removeItem("workforce.session");
+        throw new Error(data?.message || "로그인 시간이 만료되었습니다. 다시 로그인해 주세요.");
+      }
+
+      return saveStoredSession(stored, data);
+    }
+
+    async function getValidStoredSession() {
+      const stored = getStoredSession();
+      if (!stored?.auth?.access_token || !stored?.profile) {
+        throw new Error("로그인 정보가 없습니다. 다시 로그인해 주세요.");
+      }
+
+      const expiresAt = Number(stored.auth.expires_at || 0);
+      if (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 60) {
+        return refreshStoredSession(stored);
+      }
+
+      return stored;
+    }
+
+    async function supabaseRest(path, options = {}, retry = true) {
+      const stored = await getValidStoredSession();
+      const response = await fetch(`${window.SUPABASE_URL}/rest/v1/${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${stored.auth.access_token}`,
+          ...(options.headers || {})
+        }
+      });
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+
+      if (!response.ok) {
+        const message = data?.message || data?.msg || response.statusText;
+        if (retry && /jwt expired/i.test(message)) {
+          await refreshStoredSession(stored);
+          return supabaseRest(path, options, false);
+        }
+        throw new Error(message);
+      }
+
+      return data;
+    }
+
+    function updateStoredProfile(patch) {
+      const stored = getStoredSession();
+      if (!stored?.profile) {
+        return null;
+      }
+
+      const nextStored = {
+        ...stored,
+        profile: {
+          ...stored.profile,
+          ...patch
+        }
+      };
+
+      localStorage.setItem("workforce.session", JSON.stringify(nextStored));
+      return nextStored.profile;
+    }
+
+    function isWorkerRole(role) {
+      return role === "worker" || role === "user";
+    }
+
+    function isSessionError(error) {
+      const message = String(error?.message || error || "").toLowerCase();
+      return message.includes("로그인")
+        || message.includes("session")
+        || message.includes("jwt")
+        || message.includes("token")
+        || message.includes("auth")
+        || message.includes("401")
+        || message.includes("403");
+    }
+
+    function redirectToLogin(message) {
+      const params = new URLSearchParams({
+        redirect: "worker-entry.html",
+        role: "worker",
+        message
+      });
+      window.location.href = `index.html?${params.toString()}`;
+    }
+
+    function formatDate(value) {
+      if (!value) {
+        return "-";
+      }
+      return new Date(`${value}T00:00:00`).toLocaleDateString("ko-KR");
+    }
+
+    function formatDateTime(value) {
+      if (!value) {
+        return "";
+      }
+
+      const date = new Date(value);
+      const offset = date.getTimezoneOffset();
+      const local = new Date(date.getTime() - offset * 60000);
+      return local.toISOString().slice(0, 16);
+    }
+
+    function formatHours(value) {
+      return value ? `${Number(value).toFixed(1)}시간` : "-";
+    }
+
+    function formatGongsu(value) {
+      return value ? Number(value).toFixed(1) : "-";
+    }
+
+    function statusClass(status) {
+      if (status === "배치완료" || status === "근무입력 완료" || status === "입력 완료") {
+        return "complete";
+      }
+      if (String(status || "").includes("배치중")) {
+        return "progress";
+      }
+      return "waiting";
+    }
+
+    function calculateWorkMetrics(startTime, endTime, breakMinutes) {
+      if (!startTime || !endTime) {
+        return null;
+      }
+
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+        return null;
+      }
+
+      const totalMinutes = (end.getTime() - start.getTime()) / 60000;
+      const netMinutes = Math.max(0, totalMinutes - Math.max(0, breakMinutes));
+      const workHours = Math.round((netMinutes / 60) * 10) / 10;
+
+      let gongsu = 0;
+      if (workHours > 0 && workHours <= 8) {
+        gongsu = Math.round((workHours / 8) * 10) / 10;
+      } else if (workHours > 8) {
+        gongsu = Math.round((1 + (workHours - 8) * 0.1) * 10) / 10;
+      }
+
+      return { workHours, gongsu };
+    }
+
+    function getRequest(requestId) {
+      return state.requests.find((request) => request.id === requestId);
+    }
+
+    function getLog(assignmentId) {
+      return state.workLogs.find((log) => log.assignment_id === assignmentId);
+    }
+
+    function isPlaceholderName(value) {
+      const text = String(value || "").trim();
+      return !text || /^[?？]+$/.test(text) || /^unknown$/i.test(text);
+    }
+
+    function formatAssignmentTitle(assignment) {
+      const request = getRequest(assignment.request_id);
+      return request?.site_location || `배정 ${String(assignment.id || "").slice(0, 8)}`;
+    }
+
+    function formatAssignmentDate(assignment) {
+      const request = getRequest(assignment.request_id);
+      return request?.work_date ? formatDate(request.work_date) : "작업일 확인 필요";
+    }
+
+    function renderSession() {
+      if (!state.profile) {
+        sessionBar.innerHTML = `<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>`;
+        return;
+      }
+
+      sessionBar.innerHTML = `
+        <span><strong>${escapeHtml(state.profile.name)}</strong> · 작업자 · ${escapeHtml(state.profile.login_id || "")}</span>
+        <span class="session-actions">
+          <a class="session-link" href="main.html">메인</a>
+        </span>
+      `;
+    }
+
+    function renderAssignmentCards() {
+      if (state.assignments.length === 0) {
+        myAssignmentList.innerHTML = '<p class="empty">현재 배정된 현장이 없습니다.</p>';
+        return;
+      }
+
+      myAssignmentList.innerHTML = state.assignments
+        .map((assignment) => {
+          const request = getRequest(assignment.request_id);
+          const log = getLog(assignment.id);
+          const workStatus = log && (Number(log.work_hours || 0) > 0 || Number(log.labor_units || 0) > 0)
+            ? "근무입력 완료"
+            : "입력 전";
+          const requestStatus = request?.status || "배치완료";
+
+          return `
+            <article class="assignment-card">
+              <div class="assignment-card-header">
+                <div>
+                  <h3>${escapeHtml(formatAssignmentTitle(assignment))}</h3>
+                  <p class="assignment-meta">${formatAssignmentDate(assignment)} · 배정일 ${new Date(assignment.created_at).toLocaleDateString("ko-KR")}</p>
+                </div>
+                <div class="status-stack">
+                  <span class="status-pill ${statusClass(requestStatus)}">${escapeHtml(requestStatus)}</span>
+                  <span class="status-pill ${statusClass(workStatus)}">${escapeHtml(workStatus)}</span>
+                </div>
+              </div>
+            </article>
+          `;
+        })
+        .join("");
+    }
+
+    function renderAssignmentOptions() {
+      if (state.assignments.length === 0) {
+        manualAssignmentSelect.innerHTML = '<option value="">입력 가능한 배정이 없습니다.</option>';
+        return;
+      }
+
+      const currentValue = manualAssignmentSelect.value;
+      manualAssignmentSelect.innerHTML = state.assignments
+        .map((assignment) => {
+          const request = getRequest(assignment.request_id);
+          return `
+            <option value="${assignment.id}">
+              ${formatAssignmentDate(assignment)} / ${escapeHtml(formatAssignmentTitle(assignment))} / ${escapeHtml(request?.status || "배치완료")}
+            </option>
+          `;
+        })
+        .join("");
+
+      const nextValue = state.assignments.some((assignment) => assignment.id === currentValue)
+        ? currentValue
+        : state.assignments[0].id;
+      manualAssignmentSelect.value = nextValue;
+      applyManualSelection();
+    }
+
+    function renderManualEntryTable() {
+      if (state.assignments.length === 0) {
+        manualEntryTable.innerHTML = '<tr><td colspan="5" class="empty">아직 입력할 배정이 없습니다.</td></tr>';
+        return;
+      }
+
+      manualEntryTable.innerHTML = state.assignments
+        .map((assignment) => {
+          const request = getRequest(assignment.request_id);
+          const log = getLog(assignment.id);
+          const status = log && (Number(log.work_hours || 0) > 0 || Number(log.labor_units || 0) > 0)
+            ? "입력 완료"
+            : "입력 전";
+
+          return `
+            <tr>
+              <td>${escapeHtml(formatAssignmentTitle(assignment))}</td>
+              <td>${formatAssignmentDate(assignment)}</td>
+              <td><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></td>
+              <td>${formatHours(log?.work_hours || 0)}</td>
+              <td>${formatGongsu(log?.labor_units || 0)}</td>
+            </tr>
+          `;
+        })
+        .join("");
+    }
+
+    function updateManualPreview(forceError = false) {
+      const result = calculateWorkMetrics(
+        manualStartTime.value,
+        manualEndTime.value,
+        Number(manualBreakMinutes.value || 0)
+      );
+
+      if (forceError || !result) {
+        manualPreview.innerHTML = "<strong>공수 계산 미리보기</strong><span>시작시간과 종료시간을 올바르게 입력하면 자동 계산됩니다.</span>";
+        return;
+      }
+
+      manualPreview.innerHTML = `
+        <strong>실근무 ${formatHours(result.workHours)} / 공수 ${formatGongsu(result.gongsu)}</strong>
+        <span>8시간 기준 1.0, 이후 1시간마다 0.1씩 추가됩니다.</span>
+      `;
+    }
+
+    function applyManualSelection() {
+      const assignmentId = manualAssignmentSelect.value;
+      const log = getLog(assignmentId);
+
+      manualStartTime.value = formatDateTime(log?.start_time || "");
+      manualEndTime.value = formatDateTime(log?.end_time || "");
+      manualBreakMinutes.value = Number(log?.break_minutes || 0);
+      updateManualPreview();
+    }
+
+    async function trySelfBridgeProfile() {
+      if (!state.profile?.id) {
+        return;
+      }
+
+      const stored = getStoredSession();
+      const authUserMeta = stored?.auth?.user?.user_metadata || {};
+      const profilePatch = {};
+
+      if (isPlaceholderName(state.profile.name) && authUserMeta.name) {
+        profilePatch.name = String(authUserMeta.name).trim();
+      }
+
+      if (!state.profile.phone && authUserMeta.phone) {
+        profilePatch.phone = String(authUserMeta.phone).trim();
+      }
+
+      const needsPatch = Object.keys(profilePatch).length > 0;
+
+      if (!needsPatch) {
+        return;
+      }
+
+      try {
+        await supabaseRest(`profiles?id=eq.${state.profile.id}`, {
+          method: "PATCH",
+          headers: {
+            Prefer: "return=representation"
+          },
+          body: JSON.stringify(profilePatch)
+        });
+
+        const refreshed = await supabaseRest(
+          `profiles?select=id,role,name,phone,worker_id,login_id&id=eq.${state.profile.id}`
+        );
+        const nextProfile = refreshed?.[0];
+        if (nextProfile?.id) {
+          state.profile = nextProfile;
+          updateStoredProfile(nextProfile);
+        }
+      } catch (error) {
+        return;
+      }
+    }
+
+    async function loadWorkerAssignments() {
+      const queries = [`assignments?select=*&worker_id=eq.${state.profile.id}&order=created_at.desc`];
+
+      if (state.profile?.worker_id && state.profile.worker_id !== state.profile.id) {
+        queries.push(`assignments?select=*&worker_id=eq.${state.profile.worker_id}&order=created_at.desc`);
+      }
+
+      for (const query of queries) {
+        const rows = await supabaseRest(query);
+        if ((rows || []).length > 0) {
+          return rows;
+        }
+      }
+
+      return [];
+    }
+
+    async function loadWorkerLogs() {
+      const queries = [`work_logs?select=*&worker_id=eq.${state.profile.id}&order=created_at.desc`];
+
+      if (state.profile?.worker_id && state.profile.worker_id !== state.profile.id) {
+        queries.push(`work_logs?select=*&worker_id=eq.${state.profile.worker_id}&order=created_at.desc`);
+      }
+
+      for (const query of queries) {
+        const rows = await supabaseRest(query);
+        if ((rows || []).length > 0) {
+          return rows;
+        }
+      }
+
+      return [];
+    }
+
+    async function loadRequestsForAssignments(assignments) {
+      const requestIds = Array.from(new Set((assignments || []).map((assignment) => assignment.request_id).filter(Boolean)));
+      if (requestIds.length === 0) {
+        return [];
+      }
+
+      try {
+        return await supabaseRest(`job_requests?select=*&id=in.(${requestIds.join(",")})&order=work_date.desc,created_at.desc`);
+      } catch (error) {
+        state.requestLoadError = error.message;
+        return [];
+      }
+    }
+
+    async function loadWorkerPage() {
+      state.requestLoadError = "";
+      state.needsAssignmentSync = false;
+
+      const [assignments, workLogs] = await Promise.all([
+        loadWorkerAssignments(),
+        loadWorkerLogs()
+      ]);
+      const requests = await loadRequestsForAssignments(assignments);
+
+       if ((assignments || []).length === 0 && state.profile?.worker_id && state.profile.worker_id !== state.profile.id) {
+        state.needsAssignmentSync = true;
+      }
+
+      state.requests = requests || [];
+      state.assignments = assignments || [];
+      state.workLogs = workLogs || [];
+
+      renderAssignmentCards();
+      renderAssignmentOptions();
+      renderManualEntryTable();
+      updateManualPreview();
+    }
+
+    async function handleManualEntrySubmit(event) {
+      event.preventDefault();
+      const assignmentId = String(new FormData(manualEntryForm).get("assignmentId") || "");
+      const startTime = manualStartTime.value;
+      const endTime = manualEndTime.value;
+      const breakMinutes = Number(manualBreakMinutes.value || 0);
+      const assignment = state.assignments.find((item) => item.id === assignmentId);
+      const result = calculateWorkMetrics(startTime, endTime, breakMinutes);
+
+      if (!assignment || !result) {
+        updateManualPreview(true);
+        setMessage("시작시간과 종료시간을 올바르게 입력해 주세요.");
+        return;
+      }
+
+      try {
+        setMessage("근무시간을 저장하는 중입니다...", false);
+
+        await supabaseRest("work_logs?on_conflict=assignment_id", {
+          method: "POST",
+          headers: {
+            Prefer: "resolution=merge-duplicates,return=representation"
+          },
+          body: JSON.stringify({
+            assignment_id: assignmentId,
+            worker_id: assignment.worker_id,
+            start_time: new Date(startTime).toISOString(),
+            end_time: new Date(endTime).toISOString(),
+            break_minutes: breakMinutes,
+            work_hours: result.workHours,
+            labor_units: result.gongsu
+          })
+        });
+
+        await loadWorkerPage();
+        manualAssignmentSelect.value = assignmentId;
+        applyManualSelection();
+        setMessage("근무시간이 저장되었습니다.", false);
+      } catch (error) {
+        setMessage(`근무시간 저장 실패: ${error.message}`);
+      }
+    }
+
+    async function bootstrap() {
+      try {
+        const stored = await getValidStoredSession();
+        if (!isWorkerRole(stored.profile.role)) {
+          redirectToLogin("작업자 계정으로 로그인해 주세요.");
+          return;
+        }
+
+        state.profile = stored.profile;
+        await trySelfBridgeProfile();
+        renderSession();
+        setMessage("내 배치 내역을 불러오는 중입니다...", false);
+        await loadWorkerPage();
+        if (state.requestLoadError) {
+          setMessage(`작업자 페이지는 열렸지만 일부 현장 정보를 불러오지 못했습니다: ${state.requestLoadError}`, true);
+        } else if (state.needsAssignmentSync) {
+          setMessage("작업자 페이지는 열렸지만 배정 연결이 아직 맞지 않습니다. 관리자 계정으로 현장 배정 페이지를 한 번 열어 동기화해 주세요.", true);
+        } else {
+          setMessage("작업자 페이지가 준비되었습니다.", false);
+        }
+      } catch (error) {
+        if (isSessionError(error)) {
+          redirectToLogin(error.message);
+          return;
+        }
+
+        state.profile = getStoredSession()?.profile || null;
+        renderSession();
+        renderAssignmentCards();
+        renderAssignmentOptions();
+        renderManualEntryTable();
+        updateManualPreview();
+        setMessage(`작업자 페이지 로드 실패: ${error.message}`);
+      }
+    }
+
+    manualEntryForm.addEventListener("submit", handleManualEntrySubmit);
+    manualAssignmentSelect.addEventListener("change", applyManualSelection);
+    manualStartTime.addEventListener("input", () => updateManualPreview());
+    manualEndTime.addEventListener("input", () => updateManualPreview());
+    manualBreakMinutes.addEventListener("input", () => updateManualPreview());
+
+    bootstrap();
+  </script>
 </body>
 </html>

@@ -80,6 +80,10 @@
       return `${safeId}@yangpyeongsafety.app`;
     }
 
+    function isWorkerRole(role) {
+      return role === "worker" || role === "user";
+    }
+
     window.directLogin = async function directLogin(event) {
       if (event) {
         event.preventDefault();
@@ -138,7 +142,11 @@
           return false;
         }
 
-        if (profile.role !== role) {
+        const roleMatched = role === "admin"
+          ? profile.role === "admin"
+          : isWorkerRole(profile.role);
+
+        if (!roleMatched) {
           setLoginMessage("선택한 권한과 가입된 권한이 다릅니다.");
           return false;
         }

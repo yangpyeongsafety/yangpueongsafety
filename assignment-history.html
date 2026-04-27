@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>배치내역</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=SUIT:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="assignment-history" data-role="admin">
+  <div class="app-shell">
+    <div class="session-bar" id="sessionBar"></div>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">배치내역</p>
+        <h1>저장된 현장 배치 표</h1>
+        <p class="hero-copy">배정 저장이 완료된 현장만 이 표에 표시됩니다.</p>
+      </div>
+      <nav class="top-nav">
+        <a href="main.html">메인</a>
+        <a href="assignment.html">현장 배정</a>
+        <a class="ghost-btn" href="logout.html">로그아웃</a>
+      </nav>
+    </header>
+
+    <main class="dashboard">
+      <section class="panel panel-highlight">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">배치내역</p>
+            <h2>현장별 배치 현황</h2>
+          </div>
+        </div>
+
+        <p id="authMessage" class="auth-message"></p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>업체명</th>
+                <th>현장명</th>
+                <th>작업일</th>
+                <th>배정 현황</th>
+                <th>상태</th>
+                <th>배정 인력</th>
+              </tr>
+            </thead>
+            <tbody id="historyTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="supabase-config.js"></script>
+  <script>
+    const sessionBar = document.getElementById("sessionBar");
+    const authMessage = document.getElementById("authMessage");
+    const historyTable = document.getElementById("historyTable");
+
+    const state = {
+      profile: null,
+      clients: [],
+      requests: [],
+      workers: [],
+      workerProfiles: [],
+      assignments: []
+    };
+
+    function setMessage(message, isError = true) {
+      authMessage.textContent = message;
+      authMessage.className = isError ? "auth-message error" : "auth-message success";
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function normalizeText(value) {
+      return String(value || "").replace(/\s+/g, "").trim();
+    }
+
+    function normalizePhone(value) {
+      return String(value || "").replace(/\D+/g, "");
+    }
+
+    function identityKey(item) {
+      const phone = normalizePhone(item?.phone);
+      const name = normalizeText(item?.name);
+      return phone || name;
+    }
+
+    function isPlaceholderName(value) {
+      const text = String(value || "").trim();
+      return !text || /^[?？]+$/.test(text) || /^unknown$/i.test(text);
+    }
+
+    function uniqueWorkers(workers) {
+      const map = new Map();
+
+      for (const worker of workers || []) {
+        const key = identityKey(worker);
+        if (!key || map.has(key)) {
+          continue;
+        }
+        map.set(key, worker);
+      }
+
+      return Array.from(map.values());
+    }
+
+    function resolveAssignedWorker(profile, workerMap, workersByPhone) {
+      if (!profile) {
+        return null;
+      }
+
+      const linkedWorker = profile.worker_id ? workerMap.get(profile.worker_id) : null;
+      const phoneMatchedWorker = workersByPhone.get(normalizePhone(profile.phone));
+      const displayName = !isPlaceholderName(profile.name)
+        ? profile.name
+        : linkedWorker?.name || phoneMatchedWorker?.name || profile.name || "이름 미확인";
+      const displayPhone = profile.phone || linkedWorker?.phone || phoneMatchedWorker?.phone || "";
+
+      return {
+        name: displayName,
+        phone: displayPhone
+      };
+    }
+
+    function getStoredSession() {
+      try {
+        const raw = localStorage.getItem("workforce.session");
+        return raw ? JSON.parse(raw) : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function saveStoredSession(stored, auth) {
+      const authPayload = {
+        access_token: auth.access_token,
+        refresh_token: auth.refresh_token || stored.auth.refresh_token,
+        expires_in: auth.expires_in,
+        expires_at: Math.floor(Date.now() / 1000) + Number(auth.expires_in || 0),
+        token_type: auth.token_type,
+        user: auth.user || stored.auth.user
+      };
+      const nextStored = {
+        ...stored,
+        auth: authPayload
+      };
+
+      localStorage.setItem("workforce.session", JSON.stringify(nextStored));
+      localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify({
+        currentSession: authPayload,
+        expiresAt: authPayload.expires_at
+      }));
+
+      return nextStored;
+    }
+
+    async function refreshStoredSession(stored) {
+      const refreshToken = stored?.auth?.refresh_token;
+      if (!refreshToken) {
+        throw new Error("로그인 시간이 만료되었습니다. 다시 로그인해 주세요.");
+      }
+
+      const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        localStorage.removeItem("workforce.session");
+        throw new Error(data?.message || "로그인 시간이 만료되었습니다. 다시 로그인해 주세요.");
+      }
+
+      return saveStoredSession(stored, data);
+    }
+
+    async function getValidStoredSession() {
+      const stored = getStoredSession();
+      if (!stored?.auth?.access_token || !stored?.profile) {
+        throw new Error("관리자 로그인 정보가 없습니다. 다시 로그인해 주세요.");
+      }
+
+      const expiresAt = Number(stored.auth.expires_at || 0);
+      if (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 60) {
+        return refreshStoredSession(stored);
+      }
+
+      return stored;
+    }
+
+    async function supabaseRest(path, options = {}, retry = true) {
+      const stored = await getValidStoredSession();
+      const response = await fetch(`${window.SUPABASE_URL}/rest/v1/${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${stored.auth.access_token}`,
+          ...(options.headers || {})
+        }
+      });
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+      if (!response.ok) {
+        const message = data?.message || data?.msg || response.statusText;
+        if (retry && /jwt expired/i.test(message)) {
+          await refreshStoredSession(stored);
+          return supabaseRest(path, options, false);
+        }
+        throw new Error(message);
+      }
+
+      return data;
+    }
+
+    function redirectToLogin(message) {
+      const params = new URLSearchParams({
+        redirect: "assignment-history.html",
+        role: "admin",
+        message
+      });
+      window.location.href = `index.html?${params.toString()}`;
+    }
+
+    function formatDate(value) {
+      if (!value) {
+        return "-";
+      }
+      return new Date(`${value}T00:00:00`).toLocaleDateString("ko-KR");
+    }
+
+    function buildStatus(headcount, assignedCount) {
+      if (headcount > 0 && assignedCount >= headcount) {
+        return "배치완료";
+      }
+      if (assignedCount > 0) {
+        return `${assignedCount}/${headcount}명 배치중`;
+      }
+      return "대기";
+    }
+
+    function statusClass(status) {
+      if (status === "배치완료") {
+        return "complete";
+      }
+      if (String(status || "").includes("배치중")) {
+        return "progress";
+      }
+      return "waiting";
+    }
+
+    function renderSession() {
+      if (!state.profile) {
+        sessionBar.innerHTML = `<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>`;
+        return;
+      }
+
+      sessionBar.innerHTML = `
+        <span><strong>${escapeHtml(state.profile.name)}</strong> · 관리자 · ${escapeHtml(state.profile.login_id || "")}</span>
+        <span class="session-actions">
+          <a class="session-link" href="assignment.html">현장 배정</a>
+        </span>
+      `;
+    }
+
+    function buildRows() {
+      const clientMap = new Map(state.clients.map((client) => [client.id, client]));
+      const profileMap = new Map(state.workerProfiles.map((profile) => [profile.id, profile]));
+      const workerMap = new Map(state.workers.map((worker) => [worker.id, worker]));
+      const workersByPhone = new Map(
+        state.workers
+          .filter((worker) => normalizePhone(worker.phone))
+          .map((worker) => [normalizePhone(worker.phone), worker])
+      );
+
+      return state.requests
+        .map((request) => {
+          const requestAssignments = state.assignments.filter((assignment) => assignment.request_id === request.id);
+          const assignedWorkers = uniqueWorkers(
+            requestAssignments
+              .map((assignment) => resolveAssignedWorker(profileMap.get(assignment.worker_id), workerMap, workersByPhone))
+              .filter(Boolean)
+          );
+          const assignedCount = requestAssignments.length;
+          const headcount = Number(request.headcount || 0);
+          const status = buildStatus(headcount, assignedCount);
+
+          return {
+            clientName: clientMap.get(request.client_id)?.name || "-",
+            siteLocation: request.site_location || "-",
+            workDate: request.work_date || "",
+            headcount,
+            assignedCount,
+            status,
+            workers: assignedWorkers
+          };
+        })
+        .filter((row) => row.assignedCount > 0);
+    }
+
+    function renderHistory() {
+      const rows = buildRows();
+      if (rows.length === 0) {
+        historyTable.innerHTML = '<tr><td colspan="6" class="empty">저장된 배치내역이 없습니다.</td></tr>';
+        return;
+      }
+
+      historyTable.innerHTML = rows
+        .map((row) => `
+          <tr>
+            <td>${escapeHtml(row.clientName)}</td>
+            <td>${escapeHtml(row.siteLocation)}</td>
+            <td>${formatDate(row.workDate)}</td>
+            <td>${row.assignedCount}/${row.headcount}명</td>
+            <td><span class="status-pill ${statusClass(row.status)}">${escapeHtml(row.status)}</span></td>
+            <td>${row.workers.length > 0 ? row.workers.map((worker) => worker.phone ? `${escapeHtml(worker.name)} (${escapeHtml(worker.phone)})` : escapeHtml(worker.name)).join(", ") : "-"}</td>
+          </tr>
+        `)
+        .join("");
+    }
+
+    async function bootstrap() {
+      try {
+        const stored = await getValidStoredSession();
+        if (stored.profile.role !== "admin") {
+          redirectToLogin("관리자 계정으로 로그인해 주세요.");
+          return;
+        }
+
+        state.profile = stored.profile;
+        renderSession();
+        setMessage("배치내역을 불러오는 중입니다...", false);
+
+        const [clients, requests, workers, workerProfiles, assignments] = await Promise.all([
+          supabaseRest("clients?select=*&order=name.asc"),
+          supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc"),
+          supabaseRest("workers?select=id,name,phone&order=created_at.desc"),
+          supabaseRest("profiles?select=id,role,name,phone,worker_id,login_id&order=created_at.desc"),
+          supabaseRest("assignments?select=*&order=created_at.desc")
+        ]);
+
+        state.clients = clients || [];
+        state.requests = requests || [];
+        state.workers = workers || [];
+        state.workerProfiles = workerProfiles || [];
+        state.assignments = assignments || [];
+
+        renderHistory();
+        setMessage("배치내역 페이지가 준비되었습니다.", false);
+      } catch (error) {
+        redirectToLogin(error.message);
+      }
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>
