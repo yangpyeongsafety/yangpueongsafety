@@ -58,10 +58,11 @@
                 type="text"
                 name="residentNumber"
                 inputmode="numeric"
-                data-digits-only="true"
-                placeholder="숫자만 입력"
+                placeholder="000000-0000000"
+                maxlength="14"
                 required
               />
+              <small>주민번호는 반드시 `-`를 포함한 `000000-0000000` 형식으로 입력해 주세요.</small>
             </label>
             <label>
               전화번호
@@ -152,6 +153,7 @@
     const signupForm = document.getElementById("signupForm");
     const signupRoleSelect = document.getElementById("signupRole");
     const authMessage = document.getElementById("authMessage");
+    const residentNumberInput = signupForm?.querySelector("input[name='residentNumber']");
     const digitOnlyInputs = signupForm?.querySelectorAll("[data-digits-only='true']") || [];
 
     function setSignupMessage(message, isError = true) {
@@ -171,6 +173,18 @@
       return String(value || "").replace(/\D+/g, "");
     }
 
+    function normalizeResidentNumber(value) {
+      const digits = normalizeDigits(value).slice(0, 13);
+      if (digits.length <= 6) {
+        return digits;
+      }
+      return `${digits.slice(0, 6)}-${digits.slice(6)}`;
+    }
+
+    function isValidResidentNumber(value) {
+      return /^\d{6}-\d{7}$/.test(String(value || "").trim());
+    }
+
     function normalizeRole(value) {
       return value === "admin" ? "admin" : "worker";
     }
@@ -183,6 +197,12 @@
       digitOnlyInputs.forEach((input) => {
         input.value = normalizeDigits(input.value);
       });
+    }
+
+    function syncResidentNumberInput() {
+      if (residentNumberInput) {
+        residentNumberInput.value = normalizeResidentNumber(residentNumberInput.value);
+      }
     }
 
     function applyRequestedRole() {
@@ -206,13 +226,14 @@
       }
 
       syncDigitOnlyInputs();
+      syncResidentNumberInput();
       const formData = new FormData(signupForm);
 
       const payload = {
         login_id: readTrimmed(formData, "signupId"),
         role: normalizeRole(formData.get("role")),
         name: readTrimmed(formData, "name"),
-        resident_number: normalizeDigits(formData.get("residentNumber")),
+        resident_number: normalizeResidentNumber(formData.get("residentNumber")),
         phone: normalizeDigits(formData.get("phone")),
         bank_name: readTrimmed(formData, "bankName"),
         account_number: normalizeDigits(formData.get("accountNumber")),
@@ -238,6 +259,11 @@
 
       if (!password || requiredKeys.some((key) => !payload[key])) {
         setSignupMessage("입사일을 제외한 모든 항목을 입력해 주세요.");
+        return false;
+      }
+
+      if (!isValidResidentNumber(payload.resident_number)) {
+        setSignupMessage("주민번호는 000000-0000000 형식으로 -를 포함해 입력해 주세요.");
         return false;
       }
 
@@ -277,6 +303,10 @@
       input.addEventListener("input", () => {
         input.value = normalizeDigits(input.value);
       });
+    });
+
+    residentNumberInput?.addEventListener("input", () => {
+      residentNumberInput.value = normalizeResidentNumber(residentNumberInput.value);
     });
 
     applyRequestedRole();

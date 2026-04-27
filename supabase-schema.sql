@@ -149,6 +149,22 @@ as $$
   select nullif(regexp_replace(coalesce(phone_value, ''), '\D', '', 'g'), '');
 $$;
 
+create or replace function public.normalize_resident_number(resident_value text)
+returns text
+language sql
+immutable
+as $$
+  with cleaned as (
+    select left(nullif(regexp_replace(coalesce(resident_value, ''), '\D', '', 'g'), ''), 13) as digits
+  )
+  select case
+    when digits is null then null
+    when length(digits) <= 6 then digits
+    else left(digits, 6) || '-' || substr(digits, 7)
+  end
+  from cleaned;
+$$;
+
 create or replace function public.handle_normalize_phone()
 returns trigger
 language plpgsql
@@ -165,7 +181,7 @@ language plpgsql
 as $$
 begin
   new.phone := public.normalize_phone(new.phone);
-  new.resident_number := public.normalize_phone(new.resident_number);
+  new.resident_number := public.normalize_resident_number(new.resident_number);
   new.account_number := public.normalize_phone(new.account_number);
   new.emergency_contact := public.normalize_phone(new.emergency_contact);
   return new;
@@ -191,10 +207,10 @@ set phone = public.normalize_phone(phone)
 where phone is distinct from public.normalize_phone(phone);
 
 update public.profiles
-set resident_number = public.normalize_phone(resident_number),
+set resident_number = public.normalize_resident_number(resident_number),
     account_number = public.normalize_phone(account_number),
     emergency_contact = public.normalize_phone(emergency_contact)
-where resident_number is distinct from public.normalize_phone(resident_number)
+where resident_number is distinct from public.normalize_resident_number(resident_number)
    or account_number is distinct from public.normalize_phone(account_number)
    or emergency_contact is distinct from public.normalize_phone(emergency_contact);
 
@@ -248,7 +264,7 @@ declare
 begin
   meta_role := coalesce(new.raw_user_meta_data->>'role', 'worker');
   meta_name := coalesce(new.raw_user_meta_data->>'name', '');
-  meta_resident_number := public.normalize_phone(new.raw_user_meta_data->>'resident_number');
+  meta_resident_number := public.normalize_resident_number(new.raw_user_meta_data->>'resident_number');
   meta_phone := public.normalize_phone(new.raw_user_meta_data->>'phone');
   meta_bank_name := coalesce(new.raw_user_meta_data->>'bank_name', '');
   meta_account_number := public.normalize_phone(new.raw_user_meta_data->>'account_number');
