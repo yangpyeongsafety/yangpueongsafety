@@ -25,7 +25,7 @@
       <div>
         <p class="eyebrow">LOGIN</p>
         <h1>로그인</h1>
-        <p class="hero-copy">관리자 또는 사용자 계정으로 로그인하세요.</p>
+        <p class="hero-copy">관리자 또는 작업자 계정으로 로그인하세요.</p>
       </div>
     </header>
     <main class="dashboard">
@@ -42,8 +42,8 @@
           <label>
             권한
             <select name="role" id="loginRole" required>
+              <option value="worker" selected>작업자</option>
               <option value="admin">관리자</option>
-              <option value="worker">사용자</option>
             </select>
           </label>
           <label>
@@ -57,7 +57,7 @@
           <button type="button" class="primary-btn" onclick="window.directLogin(event)">로그인</button>
           <p class="auth-switch">처음이시면 <a href="signup.html">회원가입</a>으로 이동하세요.</p>
         </form>
-        <p id="authMessage" class="auth-message">로그인 준비 중입니다...</p>
+        <p id="authMessage" class="auth-message">로그인을 준비 중입니다...</p>
       </section>
     </main>
   </div>
@@ -65,6 +65,7 @@
   <script src="supabase-config.js"></script>
   <script>
     const loginForm = document.getElementById("loginForm");
+    const loginRoleSelect = document.getElementById("loginRole");
     const authMessage = document.getElementById("authMessage");
 
     function setLoginMessage(message, isError = true) {
@@ -80,8 +81,19 @@
       return `${safeId}@yangpyeongsafety.app`;
     }
 
+    function normalizeRole(value) {
+      return value === "admin" ? "admin" : "worker";
+    }
+
     function isWorkerRole(role) {
       return role === "worker" || role === "user";
+    }
+
+    function applyRequestedRole() {
+      const requestedRole = normalizeRole(new URLSearchParams(window.location.search).get("role"));
+      if (loginRoleSelect) {
+        loginRoleSelect.value = requestedRole;
+      }
     }
 
     window.directLogin = async function directLogin(event) {
@@ -90,7 +102,7 @@
         event.stopPropagation();
       }
 
-      setLoginMessage("버튼 클릭 확인. 로그인을 처리 중입니다...", false);
+      setLoginMessage("로그인을 처리 중입니다...", false);
 
       if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
         setLoginMessage("Supabase 설정을 불러오지 못했습니다. supabase-config.js를 확인해 주세요.");
@@ -98,7 +110,7 @@
       }
 
       const formData = new FormData(loginForm);
-      const role = formData.get("role");
+      const role = normalizeRole(formData.get("role"));
       const loginId = String(formData.get("loginId") || "").trim();
       const password = String(formData.get("password") || "").trim();
 
@@ -138,7 +150,7 @@
         const profile = profiles[0];
 
         if (!profile) {
-          setLoginMessage("로그인은 됐지만 사용자 프로필을 찾지 못했습니다. Supabase profiles 테이블을 확인해 주세요.");
+          setLoginMessage("로그인은 되었지만 사용자 프로필을 찾지 못했습니다. Supabase profiles 테이블을 확인해 주세요.");
           return false;
         }
 
@@ -159,11 +171,13 @@
           token_type: result.token_type,
           user: result.user
         };
+
         localStorage.setItem("workforce.session", JSON.stringify({
           profile,
           auth: authPayload
         }));
         localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify(authPayload));
+
         setLoginMessage("로그인 성공. 페이지를 이동합니다.", false);
         window.location.href = role === "admin" ? "main.html" : "worker-entry.html";
       } catch (error) {
@@ -173,6 +187,7 @@
       return false;
     };
 
+    applyRequestedRole();
     setLoginMessage("로그인 준비 완료. 아이디와 비밀번호를 입력해 주세요.", false);
   </script>
 </body>

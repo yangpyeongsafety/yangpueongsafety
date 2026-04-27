@@ -838,7 +838,7 @@ function syncAuthFields() {
     return;
   }
   const query = new URLSearchParams(window.location.search);
-  const forcedRole = normalizeRole(query.get("role") || els.signupRole?.value || els.loginRole?.value || "admin");
+  const forcedRole = normalizeRole(query.get("role") || els.signupRole?.value || els.loginRole?.value || "worker");
   const roleText = forcedRole === "admin" ? "관리자" : "사용자";
   if (els.loginRole) {
     els.loginRole.value = forcedRole;
