@@ -209,6 +209,19 @@ h1 {
   flex-wrap: wrap;
 }
 
+.toolbar-row {
+  display: flex;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.toolbar-row label {
+  flex: 1;
+  min-width: 220px;
+}
+
 .panel {
   padding: 24px;
 }
@@ -298,6 +311,11 @@ button:hover {
   border: 1px solid rgba(20, 99, 86, 0.22);
 }
 
+.danger-btn {
+  background: #fff0e8;
+  color: #a14822;
+}
+
 .page-link-btn {
   display: inline-flex;
   align-items: center;
@@ -372,6 +390,13 @@ button:hover {
 
 .table-wrap {
   overflow-x: auto;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 table {

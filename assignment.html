@@ -20,6 +20,7 @@
       </div>
       <nav class="top-nav">
         <a href="main.html">메인</a>
+        <a href="worker-management.html">인력관리</a>
         <a href="assignment-history.html">배치내역</a>
         <a href="settlement.html">정산</a>
         <a class="ghost-btn" href="logout.html">로그아웃</a>
@@ -51,7 +52,7 @@
         </div>
       </section>
       <section class="panel">
-        <div class="panel-header"><div><p class="section-kicker">2. 인력 배정</p><h2>보유 인력 등록 및 현장 배정</h2></div></div>
+        <div class="panel-header"><div><p class="section-kicker">2. 인력 배정</p><h2>보유 인력 등록 및 현장 배정</h2></div><div class="page-tools"><a class="page-link-btn" href="worker-management.html">인력관리 바로가기</a></div></div>
         <div class="dual-grid">
           <div class="subpanel">
             <h3>인력 등록</h3>
@@ -65,7 +66,9 @@
           <div class="subpanel">
             <h3>현장 배정</h3>
             <form id="assignmentForm" class="stack-form" autocomplete="off">
+              <label>작업일 필터<input type="date" id="assignmentRequestDateFilter" /></label>
               <label>배정할 요청<select name="requestId" id="assignmentRequestSelect" required></select></label>
+              <label>인력 검색<input type="search" id="assignmentWorkerSearch" placeholder="이름, 전화번호, 아이디 검색" /></label>
               <label>배정 인력<div class="direct-worker-picker" id="directWorkerPicker"></div></label>
               <small>배정 결과는 하단 카드가 아니라 배치내역 페이지 표에서 확인됩니다.</small>
               <button type="submit" class="primary-btn">배정 저장</button>
@@ -86,8 +89,10 @@
     const workerChips = document.getElementById('workerChips');
     const requestSelect = document.getElementById('assignmentRequestSelect');
     const workerPicker = document.getElementById('directWorkerPicker');
+    const requestDateFilterInput = document.getElementById('assignmentRequestDateFilter');
+    const workerSearchInput = document.getElementById('assignmentWorkerSearch');
     const workerPhoneInput = workerForm?.querySelector("input[name='phone']");
-    const state = { profile: null, clients: [], requests: [], workers: [], workerProfiles: [], assignments: [] };
+    const state = { profile: null, clients: [], requests: [], workers: [], workerProfiles: [], assignments: [], requestDateFilter: '', workerSearchTerm: '', selectedWorkerKeys: new Set() };
 
     function setMessage(message, isError = true) {
       requestMessage.textContent = message;
@@ -165,6 +170,44 @@
       }
       return Array.from(map.values()).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
     }
+    function getFilteredRequests() {
+      if (!state.requestDateFilter) return state.requests;
+      return (state.requests || []).filter((request) => String(request.work_date || '') === state.requestDateFilter);
+    }
+    function getFilteredVisibleWorkers() {
+      const keyword = String(state.workerSearchTerm || '').trim();
+      if (!keyword) return buildVisibleWorkers();
+      const textKeyword = normalizeText(keyword);
+      const phoneKeyword = normalizePhone(keyword);
+      return buildVisibleWorkers().filter((worker) => {
+        const textHaystack = [worker.name, worker.loginId].map((value) => normalizeText(value || '')).join(' ');
+        const phoneHaystack = normalizePhone(worker.phone || '');
+        return textHaystack.includes(textKeyword) || (!!phoneKeyword && phoneHaystack.includes(phoneKeyword));
+      });
+    }
+    function syncSelectedWorkerKeys() {
+      const availableKeys = new Set(buildVisibleWorkers().map((worker) => identityKey(worker)).filter(Boolean));
+      state.selectedWorkerKeys = new Set([...state.selectedWorkerKeys].filter((key) => availableKeys.has(key)));
+    }
+    function toggleSelectedWorker(worker, checked) {
+      const key = identityKey(worker);
+      if (!key) return;
+      if (checked) state.selectedWorkerKeys.add(key);
+      else state.selectedWorkerKeys.delete(key);
+    }
+    function getSelectedWorkers() {
+      syncSelectedWorkerKeys();
+      return buildVisibleWorkers()
+        .filter((worker) => state.selectedWorkerKeys.has(identityKey(worker)))
+        .map((worker) => ({
+          rawName: String(worker.name || '').trim(),
+          rawPhone: normalizePhone(worker.phone || ''),
+          name: normalizeText(worker.name || ''),
+          phone: normalizePhone(worker.phone || ''),
+          profileId: String(worker.profileId || '').trim(),
+          workerRecordId: String(worker.workerRecordId || '').trim()
+        }));
+    }
     function getStoredSession() {
       try {
         const raw = localStorage.getItem('workforce.session');
@@ -240,30 +283,40 @@
     }
     function renderWorkers() {
       const visibleWorkers = buildVisibleWorkers();
+      const filteredWorkers = getFilteredVisibleWorkers();
+      syncSelectedWorkerKeys();
       if (visibleWorkers.length === 0) {
         workerChips.innerHTML = '<p class="empty">등록된 인력이 없습니다.</p>';
         workerPicker.innerHTML = '<p class="empty">등록된 인력이 없습니다.</p>';
         return;
       }
       workerChips.innerHTML = visibleWorkers.map((worker) => `<span class="chip">${escapeHtml(worker.name)} · ${escapeHtml(worker.phone || '연락처 없음')}</span>`).join('');
-      workerPicker.innerHTML = visibleWorkers.map((worker) => `
+      if (filteredWorkers.length === 0) {
+        workerPicker.innerHTML = '<p class="empty">검색 결과가 없습니다.</p>';
+        return;
+      }
+      workerPicker.innerHTML = filteredWorkers.map((worker) => `
         <label class="direct-worker-option">
-          <input type="checkbox" name="workerIds" data-raw-name="${escapeHtml(worker.name || '')}" data-raw-phone="${escapeHtml(worker.phone || '')}" data-profile-id="${escapeHtml(worker.profileId || '')}" data-worker-record-id="${escapeHtml(worker.workerRecordId || '')}" />
+          <input type="checkbox" name="workerIds" data-raw-name="${escapeHtml(worker.name || '')}" data-raw-phone="${escapeHtml(worker.phone || '')}" data-profile-id="${escapeHtml(worker.profileId || '')}" data-worker-record-id="${escapeHtml(worker.workerRecordId || '')}" ${state.selectedWorkerKeys.has(identityKey(worker)) ? 'checked' : ''} />
           <span>${escapeHtml(worker.name)} (${escapeHtml(worker.phone || '연락처 없음')})</span>
         </label>
       `).join('');
     }
     function renderRequestOptions() {
-      if (state.requests.length === 0) {
-        requestSelect.innerHTML = '<option value="">현장 요청이 없습니다.</option>';
+      const filteredRequests = getFilteredRequests();
+      if (filteredRequests.length === 0) {
+        requestSelect.innerHTML = `<option value="">${state.requestDateFilter ? '선택한 날짜의 현장 요청이 없습니다.' : '현장 요청이 없습니다.'}</option>`;
         return;
       }
       const clientMap = new Map(state.clients.map((client) => [client.id, client]));
-      requestSelect.innerHTML = state.requests.map((request) => {
+      const currentValue = requestSelect.value;
+      requestSelect.innerHTML = filteredRequests.map((request) => {
         const client = clientMap.get(request.client_id);
         const status = buildRequestStatus(request);
         return `<option value="${request.id}">[${status}] ${escapeHtml(client?.name || '-')} / ${escapeHtml(request.site_location || '-')} / ${Number(request.headcount || 0)}명</option>`;
       }).join('');
+      const nextValue = filteredRequests.some((request) => request.id === currentValue) ? currentValue : filteredRequests[0]?.id || '';
+      requestSelect.value = nextValue;
     }
     async function loadWorkerProfiles() {
       return supabaseRest('profiles?select=id,role,name,phone,worker_id,login_id&role=eq.worker&order=created_at.desc');
@@ -433,7 +486,17 @@
       }
     }
     function readCheckedWorkers() {
-      return Array.from(document.querySelectorAll("#directWorkerPicker input[name='workerIds']:checked")).map((input) => ({ rawName: String(input.dataset.rawName || '').trim(), rawPhone: normalizePhone(input.dataset.rawPhone || ''), name: normalizeText(input.dataset.rawName || ''), phone: normalizePhone(input.dataset.rawPhone || ''), profileId: String(input.dataset.profileId || '').trim(), workerRecordId: String(input.dataset.workerRecordId || '').trim() })).filter((worker) => worker.name || worker.phone);
+      return getSelectedWorkers().filter((worker) => worker.name || worker.phone);
+    }
+    function handleWorkerPickerChange(event) {
+      const input = event.target.closest("input[name='workerIds']");
+      if (!input) return;
+      toggleSelectedWorker({
+        name: input.dataset.rawName || '',
+        phone: input.dataset.rawPhone || '',
+        profileId: input.dataset.profileId || '',
+        workerRecordId: input.dataset.workerRecordId || ''
+      }, input.checked);
     }
     async function ensureWorkerProfile(selectedWorker) {
       let profile = null;
@@ -526,6 +589,11 @@
         await saveAssignmentsSequentially(requestId, selectedWorkers, stored.profile.id);
         await upsertRequestStatus(requestId);
         assignmentForm.reset();
+        state.requestDateFilter = '';
+        state.workerSearchTerm = '';
+        state.selectedWorkerKeys.clear();
+        if (requestDateFilterInput) requestDateFilterInput.value = '';
+        if (workerSearchInput) workerSearchInput.value = '';
         await loadDashboard();
         const request = state.requests.find((item) => item.id === requestId);
         const assignedCount = getAssignedCount(requestId);
@@ -552,6 +620,15 @@
     requestForm.addEventListener('submit', handleRequestSubmit);
     workerForm.addEventListener('submit', handleWorkerSubmit);
     assignmentForm.addEventListener('submit', handleAssignmentSubmit);
+    workerPicker.addEventListener('change', handleWorkerPickerChange);
+    requestDateFilterInput?.addEventListener('change', () => {
+      state.requestDateFilter = requestDateFilterInput.value;
+      renderRequestOptions();
+    });
+    workerSearchInput?.addEventListener('input', () => {
+      state.workerSearchTerm = workerSearchInput.value;
+      renderWorkers();
+    });
     workerPhoneInput?.addEventListener('input', syncWorkerPhoneInput);
     bootstrap();
   </script>

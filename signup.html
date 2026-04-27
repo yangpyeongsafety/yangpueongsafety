@@ -25,11 +25,11 @@
       <div>
         <p class="eyebrow">SIGN UP</p>
         <h1>회원가입</h1>
-        <p class="hero-copy">관리자 또는 사용자 계정을 새로 만드세요.</p>
+        <p class="hero-copy">관리자 또는 작업자 계정을 등록합니다.</p>
       </div>
     </header>
     <main class="dashboard">
-      <section class="panel auth-panel auth-single-panel">
+      <section class="panel auth-panel">
         <form
           id="signupForm"
           class="subpanel stack-form"
@@ -39,35 +39,110 @@
           onsubmit="window.directSignup(event); return false;"
         >
           <h2>회원가입</h2>
-          <label>
-            권한
-            <select name="role" id="signupRole" required>
-              <option value="admin">관리자</option>
-              <option value="worker">사용자</option>
-            </select>
-          </label>
-          <label>
-            이름
-            <input type="text" name="name" required />
-            <small id="authNameField">사용자는 배정된 인력 이름과 같게 입력해 주세요.</small>
-          </label>
-          <label>
-            연락처
-            <input type="text" name="phone" placeholder="01012345678" inputmode="numeric" />
-            <small>전화번호는 - 없이 숫자만 입력해 주세요.</small>
-          </label>
-          <label>
-            아이디
-            <input type="text" name="signupId" required />
-          </label>
-          <label>
-            비밀번호
-            <input type="password" name="signupPassword" required />
-          </label>
+          <div class="form-grid">
+            <label>
+              권한
+              <select name="role" id="signupRole" required>
+                <option value="admin">관리자</option>
+                <option value="worker">작업자</option>
+              </select>
+            </label>
+            <label>
+              이름
+              <input type="text" name="name" required />
+              <small id="authNameField">작업자는 배정 시 사용하는 이름과 같게 입력해 주세요.</small>
+            </label>
+            <label>
+              주민번호
+              <input
+                type="text"
+                name="residentNumber"
+                inputmode="numeric"
+                data-digits-only="true"
+                placeholder="숫자만 입력"
+                required
+              />
+            </label>
+            <label>
+              전화번호
+              <input
+                type="text"
+                name="phone"
+                inputmode="numeric"
+                data-digits-only="true"
+                placeholder="01012345678"
+                required
+              />
+              <small>전화번호는 - 없이 숫자만 입력해 주세요.</small>
+            </label>
+            <label>
+              은행
+              <input type="text" name="bankName" required />
+            </label>
+            <label>
+              계좌번호
+              <input
+                type="text"
+                name="accountNumber"
+                inputmode="numeric"
+                data-digits-only="true"
+                placeholder="숫자만 입력"
+                required
+              />
+              <small>계좌번호는 - 없이 숫자만 입력해 주세요.</small>
+            </label>
+            <label>
+              혈액형
+              <select name="bloodType" required>
+                <option value="">선택</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="AB">AB</option>
+                <option value="O">O</option>
+                <option value="RH+A">RH+A</option>
+                <option value="RH+B">RH+B</option>
+                <option value="RH+AB">RH+AB</option>
+                <option value="RH+O">RH+O</option>
+                <option value="RH-A">RH-A</option>
+                <option value="RH-B">RH-B</option>
+                <option value="RH-AB">RH-AB</option>
+                <option value="RH-O">RH-O</option>
+              </select>
+            </label>
+            <label>
+              현주소
+              <input type="text" name="currentAddress" required />
+            </label>
+            <label>
+              비상연락처
+              <input
+                type="text"
+                name="emergencyContact"
+                inputmode="numeric"
+                data-digits-only="true"
+                placeholder="숫자만 입력"
+                required
+              />
+              <small>비상연락처는 - 없이 숫자만 입력해 주세요.</small>
+            </label>
+            <label>
+              입사일
+              <input type="date" name="hireDate" />
+              <small>입사일은 선택 항목입니다.</small>
+            </label>
+            <label>
+              아이디
+              <input type="text" name="signupId" required />
+            </label>
+            <label>
+              비밀번호
+              <input type="password" name="signupPassword" required />
+            </label>
+          </div>
           <button type="button" class="secondary-btn" onclick="window.directSignup(event)">회원가입</button>
-          <p class="auth-switch">이미 계정이 있으면 <a href="index.html">로그인</a>으로 이동하세요.</p>
+          <p class="auth-switch">이미 계정이 있으면 <a href="index.html">로그인</a>으로 이동해 주세요.</p>
         </form>
-        <p id="authMessage" class="auth-message">회원가입 준비 중입니다...</p>
+        <p id="authMessage" class="auth-message">회원가입을 준비 중입니다...</p>
       </section>
     </main>
   </div>
@@ -76,7 +151,7 @@
   <script>
     const signupForm = document.getElementById("signupForm");
     const authMessage = document.getElementById("authMessage");
-    const signupPhoneInput = signupForm?.querySelector('input[name="phone"]');
+    const digitOnlyInputs = signupForm?.querySelectorAll("[data-digits-only='true']") || [];
 
     function setSignupMessage(message, isError = true) {
       authMessage.textContent = message;
@@ -91,8 +166,18 @@
       return `${safeId}@yangpyeongsafety.app`;
     }
 
-    function normalizePhone(value) {
+    function normalizeDigits(value) {
       return String(value || "").replace(/\D+/g, "");
+    }
+
+    function readTrimmed(formData, key) {
+      return String(formData.get(key) || "").trim();
+    }
+
+    function syncDigitOnlyInputs() {
+      digitOnlyInputs.forEach((input) => {
+        input.value = normalizeDigits(input.value);
+      });
     }
 
     window.directSignup = async function directSignup(event) {
@@ -101,26 +186,46 @@
         event.stopPropagation();
       }
 
-      setSignupMessage("버튼 클릭 확인. 회원가입을 처리 중입니다...", false);
+      setSignupMessage("회원가입을 처리 중입니다...", false);
 
       if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
         setSignupMessage("Supabase 설정을 불러오지 못했습니다. supabase-config.js를 확인해 주세요.");
         return false;
       }
 
+      syncDigitOnlyInputs();
       const formData = new FormData(signupForm);
-      const role = formData.get("role");
-      const name = String(formData.get("name") || "").trim();
-      const phone = normalizePhone(formData.get("phone"));
-      const loginId = String(formData.get("signupId") || "").trim();
-      const password = String(formData.get("signupPassword") || "").trim();
 
-      if (signupPhoneInput) {
-        signupPhoneInput.value = phone;
-      }
+      const payload = {
+        login_id: readTrimmed(formData, "signupId"),
+        role: readTrimmed(formData, "role"),
+        name: readTrimmed(formData, "name"),
+        resident_number: normalizeDigits(formData.get("residentNumber")),
+        phone: normalizeDigits(formData.get("phone")),
+        bank_name: readTrimmed(formData, "bankName"),
+        account_number: normalizeDigits(formData.get("accountNumber")),
+        blood_type: readTrimmed(formData, "bloodType"),
+        current_address: readTrimmed(formData, "currentAddress"),
+        emergency_contact: normalizeDigits(formData.get("emergencyContact")),
+        hire_date: readTrimmed(formData, "hireDate") || null
+      };
+      const password = readTrimmed(formData, "signupPassword");
 
-      if (!name || !loginId || !password) {
-        setSignupMessage("회원가입 항목을 모두 입력해 주세요.");
+      const requiredKeys = [
+        "login_id",
+        "role",
+        "name",
+        "resident_number",
+        "phone",
+        "bank_name",
+        "account_number",
+        "blood_type",
+        "current_address",
+        "emergency_contact"
+      ];
+
+      if (!password || requiredKeys.some((key) => !payload[key])) {
+        setSignupMessage("입사일을 제외한 모든 항목을 입력해 주세요.");
         return false;
       }
 
@@ -133,14 +238,9 @@
             Authorization: `Bearer ${window.SUPABASE_ANON_KEY}`
           },
           body: JSON.stringify({
-            email: signupEmail(loginId),
+            email: signupEmail(payload.login_id),
             password,
-            data: {
-              login_id: loginId,
-              role,
-              name,
-              phone
-            }
+            data: payload
           })
         });
 
@@ -152,7 +252,7 @@
         }
 
         signupForm.reset();
-        setSignupMessage("회원가입이 완료됐습니다. 로그인 페이지에서 로그인해 주세요.", false);
+        setSignupMessage("회원가입이 완료되었습니다. 로그인 페이지에서 로그인해 주세요.", false);
       } catch (error) {
         setSignupMessage(`회원가입 요청 실패: ${error.message}`);
       }
@@ -160,11 +260,13 @@
       return false;
     };
 
-    signupPhoneInput?.addEventListener("input", () => {
-      signupPhoneInput.value = normalizePhone(signupPhoneInput.value);
+    digitOnlyInputs.forEach((input) => {
+      input.addEventListener("input", () => {
+        input.value = normalizeDigits(input.value);
+      });
     });
 
-    setSignupMessage("회원가입 준비 완료. 정보를 입력하고 버튼을 눌러주세요.", false);
+    setSignupMessage("회원가입 준비 완료. 정보를 입력하고 버튼을 눌러 주세요.", false);
   </script>
 </body>
 </html>

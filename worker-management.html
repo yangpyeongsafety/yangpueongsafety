@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Worker Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=SUIT:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="worker-management" data-role="admin">
+  <div class="app-shell">
+    <div class="session-bar" id="sessionBar"></div>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">WORKER MANAGEMENT</p>
+        <h1>Admin Worker Management</h1>
+        <p class="hero-copy">Add or delete workers and review which worker account is linked to each person.</p>
+      </div>
+      <nav class="top-nav">
+        <a href="main.html">Main</a>
+        <a href="assignment.html">Assignment</a>
+        <a href="assignment-history.html">History</a>
+        <a class="ghost-btn" href="logout.html">Logout</a>
+      </nav>
+    </header>
+
+    <main class="dashboard">
+      <section class="panel panel-highlight">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">1. Add Worker</p>
+            <h2>Create Worker</h2>
+          </div>
+        </div>
+        <form id="workerManageForm" class="form-grid" autocomplete="off">
+          <label>
+            Name
+            <input type="text" name="name" placeholder="Example: Kim Minsu" required />
+          </label>
+          <label>
+            Phone
+            <input type="text" name="phone" placeholder="01012345678" inputmode="numeric" required />
+            <small>Enter digits only without dashes.</small>
+          </label>
+          <button type="submit" class="primary-btn">Add Worker</button>
+        </form>
+        <p id="authMessage" class="auth-message"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">2. Worker List</p>
+            <h2>Manage Registered Workers</h2>
+          </div>
+        </div>
+        <div class="toolbar-row">
+          <label>
+            Search
+            <input type="search" id="workerSearchInput" placeholder="Search by name, phone, or login id" />
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Linked Account</th>
+                <th>Assignments</th>
+                <th>Manage</th>
+              </tr>
+            </thead>
+            <tbody id="workerManageTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="supabase-config.js"></script>
+  <script>
+    const workerManageForm = document.getElementById("workerManageForm");
+    const sessionBar = document.getElementById("sessionBar");
+    const authMessage = document.getElementById("authMessage");
+    const workerSearchInput = document.getElementById("workerSearchInput");
+    const workerManageTable = document.getElementById("workerManageTable");
+    const workerPhoneInput = workerManageForm?.querySelector("input[name='phone']");
+
+    const state = {
+      profile: null,
+      workers: [],
+      workerProfiles: [],
+      assignments: [],
+      searchTerm: ""
+    };
+
+    function setMessage(message, isError = true) {
+      authMessage.textContent = message;
+      authMessage.className = isError ? "auth-message error" : "auth-message success";
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function normalizePhone(value) {
+      return String(value || "").replace(/\D+/g, "");
+    }
+
+    function normalizeText(value) {
+      return String(value || "").replace(/\s+/g, "").trim().toLowerCase();
+    }
+
+    function syncPhoneInput() {
+      if (workerPhoneInput) {
+        workerPhoneInput.value = normalizePhone(workerPhoneInput.value);
+      }
+    }
+
+    function getStoredSession() {
+      try {
+        const raw = localStorage.getItem("workforce.session");
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveStoredSession(stored, auth) {
+      const authPayload = {
+        access_token: auth.access_token,
+        refresh_token: auth.refresh_token || stored.auth.refresh_token,
+        expires_in: auth.expires_in,
+        expires_at: Math.floor(Date.now() / 1000) + Number(auth.expires_in || 0),
+        token_type: auth.token_type,
+        user: auth.user || stored.auth.user
+      };
+      const nextStored = { ...stored, auth: authPayload };
+      localStorage.setItem("workforce.session", JSON.stringify(nextStored));
+      localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify({
+        currentSession: authPayload,
+        expiresAt: authPayload.expires_at
+      }));
+      return nextStored;
+    }
+
+    async function refreshStoredSession(stored) {
+      const refreshToken = stored?.auth?.refresh_token;
+      if (!refreshToken) throw new Error("Login expired. Please sign in again.");
+
+      const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        localStorage.removeItem("workforce.session");
+        throw new Error(data?.message || "Login expired. Please sign in again.");
+      }
+      return saveStoredSession(stored, data);
+    }
+
+    async function getValidStoredSession() {
+      const stored = getStoredSession();
+      if (!stored?.auth?.access_token || !stored?.profile) {
+        throw new Error("Admin session not found. Please sign in again.");
+      }
+      const expiresAt = Number(stored.auth.expires_at || 0);
+      if (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 60) {
+        return refreshStoredSession(stored);
+      }
+      return stored;
+    }
+
+    async function supabaseRest(path, options = {}, retry = true) {
+      const stored = await getValidStoredSession();
+      const response = await fetch(`${window.SUPABASE_URL}/rest/v1/${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${stored.auth.access_token}`,
+          ...(options.headers || {})
+        }
+      });
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+      if (!response.ok) {
+        const message = data?.message || data?.msg || response.statusText;
+        if (retry && /jwt expired/i.test(message)) {
+          await refreshStoredSession(stored);
+          return supabaseRest(path, options, false);
+        }
+        throw new Error(message);
+      }
+      return data;
+    }
+
+    function redirectToLogin(message) {
+      const params = new URLSearchParams({ redirect: "worker-management.html", role: "admin", message });
+      window.location.href = `index.html?${params.toString()}`;
+    }
+
+    function renderSession() {
+      if (!state.profile) {
+        sessionBar.innerHTML = '<span>No session.</span><a class="session-link" href="index.html">Login</a>';
+        return;
+      }
+      sessionBar.innerHTML = `
+        <span><strong>${escapeHtml(state.profile.name)}</strong> · Admin · ${escapeHtml(state.profile.login_id || "")}</span>
+        <span class="session-actions">
+          <a class="session-link" href="main.html">Main</a>
+          <a class="session-link" href="assignment.html">Assignment</a>
+        </span>
+      `;
+    }
+
+    function findMatchingProfile(worker) {
+      const workerPhone = normalizePhone(worker?.phone);
+      const workerName = normalizeText(worker?.name);
+      if (worker?.id) {
+        const linked = state.workerProfiles.find((profile) => profile.worker_id === worker.id);
+        if (linked) return linked;
+      }
+      if (workerPhone) {
+        const byPhone = state.workerProfiles.find((profile) => normalizePhone(profile.phone) === workerPhone);
+        if (byPhone) return byPhone;
+      }
+      if (workerName) {
+        return state.workerProfiles.find((profile) => normalizeText(profile.name) === workerName) || null;
+      }
+      return null;
+    }
+
+    function getAssignmentCount(workerId) {
+      return state.assignments.filter((assignment) => assignment.worker_id === workerId).length;
+    }
+
+    function getFilteredWorkers() {
+      const keyword = String(state.searchTerm || "").trim();
+      const textKeyword = normalizeText(keyword);
+      const phoneKeyword = normalizePhone(keyword);
+      return state.workers.filter((worker) => {
+        if (!keyword) return true;
+        const profile = findMatchingProfile(worker);
+        const haystackText = [worker.name, profile?.name, profile?.login_id]
+          .map((value) => normalizeText(value || ""))
+          .join(" ");
+        const haystackPhone = [worker.phone, profile?.phone]
+          .map((value) => normalizePhone(value || ""))
+          .join(" ");
+        return haystackText.includes(textKeyword) || (!!phoneKeyword && haystackPhone.includes(phoneKeyword));
+      });
+    }
+
+    function renderWorkers() {
+      const workers = getFilteredWorkers();
+      if (workers.length === 0) {
+        workerManageTable.innerHTML = '<tr><td colspan="5" class="empty">No workers found.</td></tr>';
+        return;
+      }
+
+      workerManageTable.innerHTML = workers.map((worker) => {
+        const profile = findMatchingProfile(worker);
+        const assignmentCount = getAssignmentCount(worker.id);
+        const linkedAccount = profile
+          ? `${escapeHtml(profile.name || "-")} (${escapeHtml(profile.login_id || "no login id")})`
+          : "No linked worker account";
+
+        return `
+          <tr>
+            <td>${escapeHtml(worker.name || "-")}</td>
+            <td>${escapeHtml(normalizePhone(worker.phone) || "-")}</td>
+            <td>${linkedAccount}</td>
+            <td>${assignmentCount}</td>
+            <td>
+              <div class="table-actions">
+                <button type="button" class="danger-btn" data-action="delete-worker" data-worker-id="${escapeHtml(worker.id)}">Delete</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    async function linkProfileIfNeeded(worker) {
+      const profile = findMatchingProfile(worker);
+      if (!profile?.id) return;
+      const patch = {};
+      if (profile.worker_id !== worker.id) patch.worker_id = worker.id;
+      if (normalizePhone(profile.phone) !== normalizePhone(worker.phone)) patch.phone = normalizePhone(worker.phone);
+      if (!profile.name && worker.name) patch.name = worker.name;
+      if (Object.keys(patch).length === 0) return;
+      await supabaseRest(`profiles?id=eq.${profile.id}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify(patch)
+      });
+    }
+
+    async function loadPageData() {
+      const [workers, workerProfiles, assignments] = await Promise.all([
+        supabaseRest("workers?select=*&order=created_at.desc"),
+        supabaseRest("profiles?select=id,role,name,phone,worker_id,login_id&role=eq.worker&order=created_at.desc"),
+        supabaseRest("assignments?select=id,worker_id")
+      ]);
+      state.workers = workers || [];
+      state.workerProfiles = workerProfiles || [];
+      state.assignments = assignments || [];
+      renderWorkers();
+    }
+
+    async function handleAddWorkerSubmit(event) {
+      event.preventDefault();
+      syncPhoneInput();
+      const formData = new FormData(workerManageForm);
+      const name = String(formData.get("name") || "").trim();
+      const phone = normalizePhone(formData.get("phone"));
+      if (!name || !phone) {
+        setMessage("Enter both name and phone.");
+        return;
+      }
+
+      const duplicated = state.workers.find((worker) => normalizePhone(worker.phone) === phone);
+      if (duplicated) {
+        setMessage("This worker is already registered.");
+        return;
+      }
+
+      try {
+        setMessage("Adding worker...", false);
+        const created = await supabaseRest("workers", {
+          method: "POST",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify({ name, phone })
+        });
+        const worker = created?.[0];
+        if (!worker?.id) throw new Error("Worker record was not created.");
+        await loadPageData();
+        await linkProfileIfNeeded(worker);
+        workerManageForm.reset();
+        await loadPageData();
+        setMessage("Worker added.", false);
+      } catch (error) {
+        setMessage(`Add failed: ${error.message}`);
+      }
+    }
+
+    async function handleWorkerTableClick(event) {
+      const button = event.target.closest("[data-action='delete-worker']");
+      if (!button) return;
+      const workerId = button.dataset.workerId || "";
+      const worker = state.workers.find((item) => item.id === workerId);
+      if (!worker) return;
+
+      const profile = findMatchingProfile(worker);
+      const assignmentCount = getAssignmentCount(worker.id);
+      const warningParts = [];
+      if (profile?.login_id) warningParts.push(`linked account: ${profile.login_id}`);
+      if (assignmentCount > 0) warningParts.push(`assignments: ${assignmentCount}`);
+      const warningText = warningParts.length > 0 ? `\nWarning: ${warningParts.join(", ")} may also be affected.` : "";
+      const confirmed = window.confirm(`Delete worker ${worker.name}?${warningText}`);
+      if (!confirmed) return;
+
+      try {
+        setMessage("Deleting worker...", false);
+        await supabaseRest(`workers?id=eq.${worker.id}`, {
+          method: "DELETE",
+          headers: { Prefer: "return=minimal" }
+        });
+        await loadPageData();
+        setMessage("Worker deleted.", false);
+      } catch (error) {
+        setMessage(`Delete failed: ${error.message}`);
+      }
+    }
+
+    async function bootstrap() {
+      try {
+        const stored = await getValidStoredSession();
+        if (stored.profile.role !== "admin") {
+          redirectToLogin("Please sign in with an admin account.");
+          return;
+        }
+        state.profile = stored.profile;
+        renderSession();
+        setMessage("Loading worker management page...", false);
+        await loadPageData();
+        setMessage("Worker management page is ready.", false);
+      } catch (error) {
+        redirectToLogin(error.message);
+      }
+    }
+
+    workerManageForm.addEventListener("submit", handleAddWorkerSubmit);
+    workerPhoneInput?.addEventListener("input", syncPhoneInput);
+    workerSearchInput.addEventListener("input", () => {
+      state.searchTerm = workerSearchInput.value;
+      renderWorkers();
+    });
+    workerManageTable.addEventListener("click", handleWorkerTableClick);
+    bootstrap();
+  </script>
+</body>
+</html>

@@ -16,7 +16,14 @@ create table if not exists public.profiles (
   login_id text not null unique,
   role text not null check (role in ('admin', 'worker')),
   name text not null,
+  resident_number text,
   phone text,
+  bank_name text,
+  account_number text,
+  blood_type text,
+  current_address text,
+  emergency_contact text,
+  hire_date date,
   worker_id uuid references public.workers(id) on delete set null,
   created_at timestamptz not null default now()
 );
@@ -25,7 +32,14 @@ alter table public.profiles
   add column if not exists login_id text,
   add column if not exists role text,
   add column if not exists name text,
+  add column if not exists resident_number text,
   add column if not exists phone text,
+  add column if not exists bank_name text,
+  add column if not exists account_number text,
+  add column if not exists blood_type text,
+  add column if not exists current_address text,
+  add column if not exists emergency_contact text,
+  add column if not exists hire_date date,
   add column if not exists worker_id uuid references public.workers(id) on delete set null,
   add column if not exists created_at timestamptz not null default now();
 
@@ -145,6 +159,19 @@ begin
 end;
 $$;
 
+create or replace function public.handle_normalize_profile_fields()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.phone := public.normalize_phone(new.phone);
+  new.resident_number := public.normalize_phone(new.resident_number);
+  new.account_number := public.normalize_phone(new.account_number);
+  new.emergency_contact := public.normalize_phone(new.emergency_contact);
+  return new;
+end;
+$$;
+
 drop trigger if exists workers_normalize_phone on public.workers;
 create trigger workers_normalize_phone
 before insert or update on public.workers
@@ -153,7 +180,7 @@ for each row execute procedure public.handle_normalize_phone();
 drop trigger if exists profiles_normalize_phone on public.profiles;
 create trigger profiles_normalize_phone
 before insert or update on public.profiles
-for each row execute procedure public.handle_normalize_phone();
+for each row execute procedure public.handle_normalize_profile_fields();
 
 update public.workers
 set phone = public.normalize_phone(phone)
@@ -162,6 +189,14 @@ where phone is distinct from public.normalize_phone(phone);
 update public.profiles
 set phone = public.normalize_phone(phone)
 where phone is distinct from public.normalize_phone(phone);
+
+update public.profiles
+set resident_number = public.normalize_phone(resident_number),
+    account_number = public.normalize_phone(account_number),
+    emergency_contact = public.normalize_phone(emergency_contact)
+where resident_number is distinct from public.normalize_phone(resident_number)
+   or account_number is distinct from public.normalize_phone(account_number)
+   or emergency_contact is distinct from public.normalize_phone(emergency_contact);
 
 with matched_workers as (
   select
@@ -200,13 +235,27 @@ as $$
 declare
   meta_role text;
   meta_name text;
+  meta_resident_number text;
   meta_phone text;
+  meta_bank_name text;
+  meta_account_number text;
+  meta_blood_type text;
+  meta_current_address text;
+  meta_emergency_contact text;
+  meta_hire_date date;
   meta_login_id text;
   matched_worker_id uuid;
 begin
   meta_role := coalesce(new.raw_user_meta_data->>'role', 'worker');
   meta_name := coalesce(new.raw_user_meta_data->>'name', '');
+  meta_resident_number := public.normalize_phone(new.raw_user_meta_data->>'resident_number');
   meta_phone := public.normalize_phone(new.raw_user_meta_data->>'phone');
+  meta_bank_name := coalesce(new.raw_user_meta_data->>'bank_name', '');
+  meta_account_number := public.normalize_phone(new.raw_user_meta_data->>'account_number');
+  meta_blood_type := coalesce(new.raw_user_meta_data->>'blood_type', '');
+  meta_current_address := coalesce(new.raw_user_meta_data->>'current_address', '');
+  meta_emergency_contact := public.normalize_phone(new.raw_user_meta_data->>'emergency_contact');
+  meta_hire_date := nullif(new.raw_user_meta_data->>'hire_date', '')::date;
   meta_login_id := coalesce(new.raw_user_meta_data->>'login_id', split_part(new.email, '@', 1));
 
   if meta_role = 'worker' then
@@ -236,8 +285,36 @@ begin
     end if;
   end if;
 
-  insert into public.profiles (id, login_id, role, name, phone, worker_id)
-  values (new.id, meta_login_id, meta_role, meta_name, meta_phone, matched_worker_id);
+  insert into public.profiles (
+    id,
+    login_id,
+    role,
+    name,
+    resident_number,
+    phone,
+    bank_name,
+    account_number,
+    blood_type,
+    current_address,
+    emergency_contact,
+    hire_date,
+    worker_id
+  )
+  values (
+    new.id,
+    meta_login_id,
+    meta_role,
+    meta_name,
+    meta_resident_number,
+    meta_phone,
+    meta_bank_name,
+    meta_account_number,
+    meta_blood_type,
+    meta_current_address,
+    meta_emergency_contact,
+    meta_hire_date,
+    matched_worker_id
+  );
 
   return new;
 end;
