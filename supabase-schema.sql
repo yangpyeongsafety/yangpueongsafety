@@ -388,6 +388,12 @@ to authenticated
 using (id = auth.uid() or public.is_admin())
 with check (id = auth.uid() or public.is_admin());
 
+drop policy if exists "profiles admin delete" on public.profiles;
+create policy "profiles admin delete"
+on public.profiles for delete
+to authenticated
+using (public.is_admin());
+
 drop policy if exists "workers admin manage" on public.workers;
 create policy "workers admin manage"
 on public.workers for all
