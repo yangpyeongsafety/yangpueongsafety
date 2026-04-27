@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
@@ -6,21 +6,17 @@
   <title>현장 배정</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=SUIT:wght@400;500;600;700;800&display=swap"
-    rel="stylesheet"
-  />
+  <link href="https://fonts.googleapis.com/css2?family=SUIT:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body data-page="assignment" data-role="admin">
   <div class="app-shell">
     <div class="session-bar" id="sessionBar"></div>
-
     <header class="hero">
       <div>
         <p class="eyebrow">현장 배정</p>
         <h1>보유 인력 관리 및 현장 배치</h1>
-        <p class="hero-copy">현장 요청을 등록하고, 배정 가능한 인력을 연결한 뒤 배치내역 페이지에서 저장 결과를 확인하세요.</p>
+        <p class="hero-copy">현장 요청을 등록하고 배정 가능한 인력을 저장하세요. 결과는 배치내역 페이지에서 확인할 수 있습니다.</p>
       </div>
       <nav class="top-nav">
         <a href="main.html">메인</a>
@@ -29,103 +25,49 @@
         <a class="ghost-btn" href="logout.html">로그아웃</a>
       </nav>
     </header>
-
     <main class="dashboard">
       <section class="panel panel-highlight">
         <div class="panel-header">
           <div>
             <p class="section-kicker">1. 현장 요청</p>
-            <h2>새 요청 등록</h2>
+            <h2>업장 요청 등록</h2>
           </div>
-          <div class="page-tools">
-            <a class="page-link-btn" href="assignment-history.html">배치내역 보기</a>
-          </div>
+          <div class="page-tools"><a class="page-link-btn" href="assignment-history.html">배치내역 보기</a></div>
         </div>
-
         <form id="requestForm" class="form-grid" autocomplete="off">
-          <label>
-            업체명
-            <input type="text" name="clientName" placeholder="예: 만보" required />
-          </label>
-          <label>
-            연락 방식
-            <select name="contactMethod" required>
-              <option value="문자">문자</option>
-              <option value="전화">전화</option>
-            </select>
-          </label>
-          <label>
-            필요 인원
-            <input type="number" name="headcount" min="1" placeholder="2" required />
-          </label>
-          <label>
-            현장명
-            <input type="text" name="siteLocation" placeholder="양평 현장" required />
-          </label>
-          <label>
-            작업일
-            <input type="date" name="workDate" required />
-          </label>
+          <label>업체명<input type="text" name="clientName" placeholder="예: 만보" required /></label>
+          <label>연락 방식<select name="contactMethod" required><option value="문자">문자</option><option value="전화">전화</option></select></label>
+          <label>필요 인원<input type="number" name="headcount" min="1" placeholder="2" required /></label>
+          <label>현장명<input type="text" name="siteLocation" placeholder="양평 현장" required /></label>
+          <label>작업일<input type="date" name="workDate" required /></label>
           <button type="submit" class="primary-btn">현장 요청 저장</button>
         </form>
-
         <p id="authMessage" class="auth-message"></p>
-
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr>
-                <th>업체명</th>
-                <th>연락 방식</th>
-                <th>배정 현황</th>
-                <th>현장명</th>
-                <th>작업일</th>
-                <th>상태</th>
-              </tr>
-            </thead>
+            <thead><tr><th>업체명</th><th>연락 방식</th><th>배정 현황</th><th>현장명</th><th>작업일</th><th>상태</th></tr></thead>
             <tbody id="requestsTable"></tbody>
           </table>
         </div>
       </section>
-
       <section class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="section-kicker">2. 인력 배정</p>
-            <h2>보유 인력 등록 및 현장 배정</h2>
-          </div>
-        </div>
-
+        <div class="panel-header"><div><p class="section-kicker">2. 인력 배정</p><h2>보유 인력 등록 및 현장 배정</h2></div></div>
         <div class="dual-grid">
           <div class="subpanel">
             <h3>인력 등록</h3>
             <form id="workerForm" class="stack-form" autocomplete="off">
-              <label>
-                이름
-                <input type="text" name="name" placeholder="예: 김민수" required />
-              </label>
-              <label>
-                연락처
-                <input type="text" name="phone" placeholder="010-0000-0000" required />
-              </label>
+              <label>이름<input type="text" name="name" placeholder="예: 김민수" required /></label>
+              <label>연락처<input type="text" name="phone" placeholder="01012345678" inputmode="numeric" required /><small>전화번호는 - 없이 숫자만 입력해 주세요.</small></label>
               <button type="submit" class="secondary-btn">인력 추가</button>
             </form>
-
             <div class="chips" id="workerChips"></div>
           </div>
-
           <div class="subpanel">
             <h3>현장 배정</h3>
             <form id="assignmentForm" class="stack-form" autocomplete="off">
-              <label>
-                배정할 요청
-                <select name="requestId" id="assignmentRequestSelect" required></select>
-              </label>
-              <label>
-                배정 인력
-                <div class="direct-worker-picker" id="directWorkerPicker"></div>
-              </label>
-              <small>배정 저장 후 결과는 하단이 아니라 배치내역 페이지에 표시됩니다.</small>
+              <label>배정할 요청<select name="requestId" id="assignmentRequestSelect" required></select></label>
+              <label>배정 인력<div class="direct-worker-picker" id="directWorkerPicker"></div></label>
+              <small>배정 결과는 하단 카드가 아니라 배치내역 페이지 표에서 확인됩니다.</small>
               <button type="submit" class="primary-btn">배정 저장</button>
             </form>
           </div>
@@ -133,217 +75,134 @@
       </section>
     </main>
   </div>
-
   <script src="supabase-config.js"></script>
   <script>
-    const requestForm = document.getElementById("requestForm");
-    const workerForm = document.getElementById("workerForm");
-    const assignmentForm = document.getElementById("assignmentForm");
-    const sessionBar = document.getElementById("sessionBar");
-    const requestMessage = document.getElementById("authMessage");
-    const requestsTable = document.getElementById("requestsTable");
-    const workerChips = document.getElementById("workerChips");
-    const requestSelect = document.getElementById("assignmentRequestSelect");
-    const workerPicker = document.getElementById("directWorkerPicker");
-
-    const state = {
-      profile: null,
-      clients: [],
-      requests: [],
-      workers: [],
-      workerProfiles: [],
-      assignments: []
-    };
+    const requestForm = document.getElementById('requestForm');
+    const workerForm = document.getElementById('workerForm');
+    const assignmentForm = document.getElementById('assignmentForm');
+    const sessionBar = document.getElementById('sessionBar');
+    const requestMessage = document.getElementById('authMessage');
+    const requestsTable = document.getElementById('requestsTable');
+    const workerChips = document.getElementById('workerChips');
+    const requestSelect = document.getElementById('assignmentRequestSelect');
+    const workerPicker = document.getElementById('directWorkerPicker');
+    const workerPhoneInput = workerForm?.querySelector("input[name='phone']");
+    const state = { profile: null, clients: [], requests: [], workers: [], workerProfiles: [], assignments: [] };
 
     function setMessage(message, isError = true) {
       requestMessage.textContent = message;
-      requestMessage.className = isError ? "auth-message error" : "auth-message success";
+      requestMessage.className = isError ? 'auth-message error' : 'auth-message success';
     }
-
     function escapeHtml(value) {
-      return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+      return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
     }
-
-    function normalizeText(value) {
-      return String(value || "").replace(/\s+/g, "").trim();
+    function normalizeText(value) { return String(value || '').replace(/\s+/g, '').trim(); }
+    function normalizePhone(value) { return String(value || '').replace(/\D+/g, ''); }
+    function syncWorkerPhoneInput() {
+      if (workerPhoneInput) workerPhoneInput.value = normalizePhone(workerPhoneInput.value);
     }
-
-    function normalizePhone(value) {
-      return String(value || "").replace(/\D+/g, "");
-    }
-
-    function sleep(ms) {
-      return new Promise((resolve) => window.setTimeout(resolve, ms));
-    }
-
     function formatContactMethod(value) {
-      const normalized = String(value || "").trim().toLowerCase();
-      if (normalized === "text" || normalized === "문자") {
-        return "문자";
-      }
-      if (normalized === "call" || normalized === "전화") {
-        return "전화";
-      }
-      return value || "-";
+      const normalized = String(value || '').trim().toLowerCase();
+      if (normalized === 'text' || normalized === '문자') return '문자';
+      if (normalized === 'call' || normalized === '전화') return '전화';
+      return value || '-';
     }
-
     function isPlaceholderName(value) {
-      const text = String(value || "").trim();
-      return !text || /^[?？]+$/.test(text) || /^unknown$/i.test(text);
+      const text = String(value || '').trim();
+      return !text || /^\?+$/.test(text) || /^unknown$/i.test(text);
     }
-
     function identityKey(item) {
       const phone = normalizePhone(item?.phone);
       const name = normalizeText(item?.name);
       return phone || name;
     }
-
+    function getAssignedCount(requestId) {
+      return state.assignments.filter((assignment) => assignment.request_id === requestId).length;
+    }
+    function buildRequestStatus(request, assignedCount = getAssignedCount(request.id)) {
+      const headcount = Number(request.headcount || 0);
+      if (headcount > 0 && assignedCount >= headcount) return '배치완료';
+      if (assignedCount > 0) return `${assignedCount}/${headcount}명 배치중`;
+      return '대기';
+    }
+    function statusClass(status) {
+      if (status === '배치완료') return 'complete';
+      if (String(status || '').includes('배치중')) return 'progress';
+      return 'waiting';
+    }
     function workerDisplayScore(worker) {
       let score = 0;
-      if (worker?.profileId) score += 100;
-      if (worker?.workerRecordId) score += 20;
+      if (worker?.workerRecordId) score += 100;
+      if (worker?.profileId) score += 30;
       if (normalizePhone(worker?.phone)) score += 10;
       if (!isPlaceholderName(worker?.name)) score += 10;
-      return score + Math.min(String(worker?.name || "").length, 10);
+      return score + Math.min(String(worker?.name || '').length, 10);
     }
-
     function mergeWorkerRecord(current, candidate) {
-      if (!current) {
-        return { ...candidate };
-      }
-
+      if (!current) return { ...candidate };
       const preferCandidate = workerDisplayScore(candidate) > workerDisplayScore(current);
       const primary = preferCandidate ? candidate : current;
       const secondary = preferCandidate ? current : candidate;
-
       return {
-        name: !isPlaceholderName(primary?.name) ? primary.name : secondary?.name || primary?.name || "",
-        phone: primary?.phone || secondary?.phone || "",
-        profileId: primary?.profileId || secondary?.profileId || "",
-        workerRecordId: primary?.workerRecordId || secondary?.workerRecordId || "",
-        loginId: primary?.loginId || secondary?.loginId || ""
+        name: !isPlaceholderName(primary?.name) ? primary.name : secondary?.name || primary?.name || '',
+        phone: normalizePhone(primary?.phone || secondary?.phone || ''),
+        profileId: primary?.profileId || secondary?.profileId || '',
+        workerRecordId: primary?.workerRecordId || secondary?.workerRecordId || '',
+        loginId: primary?.loginId || secondary?.loginId || ''
       };
     }
-
     function buildVisibleWorkers() {
       const map = new Map();
-
       for (const worker of state.workers || []) {
-        const candidate = {
-          name: worker.name,
-          phone: worker.phone,
-          workerRecordId: worker.id || ""
-        };
+        const candidate = { name: worker.name, phone: normalizePhone(worker.phone), workerRecordId: worker.id || '' };
         const key = identityKey(candidate);
-        if (key) {
-          map.set(key, mergeWorkerRecord(map.get(key), candidate));
-        }
+        if (key) map.set(key, mergeWorkerRecord(map.get(key), candidate));
       }
-
       for (const profile of state.workerProfiles || []) {
-        const candidate = {
-          name: profile.name,
-          phone: profile.phone,
-          profileId: profile.id || "",
-          workerRecordId: profile.worker_id || "",
-          loginId: profile.login_id || ""
-        };
+        const candidate = { name: profile.name, phone: normalizePhone(profile.phone), profileId: profile.id || '', workerRecordId: profile.worker_id || '', loginId: profile.login_id || '' };
         const key = identityKey(candidate);
-        if (key) {
-          map.set(key, mergeWorkerRecord(map.get(key), candidate));
-        }
+        if (key) map.set(key, mergeWorkerRecord(map.get(key), candidate));
       }
-
-      return Array.from(map.values()).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+      return Array.from(map.values()).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
     }
-
     function getStoredSession() {
       try {
-        const raw = localStorage.getItem("workforce.session");
+        const raw = localStorage.getItem('workforce.session');
         return raw ? JSON.parse(raw) : null;
-      } catch (error) {
+      } catch {
         return null;
       }
     }
-
     function saveStoredSession(stored, auth) {
-      const authPayload = {
-        access_token: auth.access_token,
-        refresh_token: auth.refresh_token || stored.auth.refresh_token,
-        expires_in: auth.expires_in,
-        expires_at: Math.floor(Date.now() / 1000) + Number(auth.expires_in || 0),
-        token_type: auth.token_type,
-        user: auth.user || stored.auth.user
-      };
+      const authPayload = { access_token: auth.access_token, refresh_token: auth.refresh_token || stored.auth.refresh_token, expires_in: auth.expires_in, expires_at: Math.floor(Date.now() / 1000) + Number(auth.expires_in || 0), token_type: auth.token_type, user: auth.user || stored.auth.user };
       const nextStored = { ...stored, auth: authPayload };
-
-      localStorage.setItem("workforce.session", JSON.stringify(nextStored));
-      localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify({
-        currentSession: authPayload,
-        expiresAt: authPayload.expires_at
-      }));
-
+      localStorage.setItem('workforce.session', JSON.stringify(nextStored));
+      localStorage.setItem('sb-riyxhsesprzvnvconhos-auth-token', JSON.stringify({ currentSession: authPayload, expiresAt: authPayload.expires_at }));
       return nextStored;
     }
-
     async function refreshStoredSession(stored) {
       const refreshToken = stored?.auth?.refresh_token;
-      if (!refreshToken) {
-        throw new Error("로그인 시간이 만료되었습니다. 다시 로그인해 주세요.");
-      }
-
-      const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: window.SUPABASE_ANON_KEY
-        },
-        body: JSON.stringify({ refresh_token: refreshToken })
-      });
-
+      if (!refreshToken) throw new Error('로그인 시간이 만료됐습니다. 다시 로그인해 주세요.');
+      const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: window.SUPABASE_ANON_KEY }, body: JSON.stringify({ refresh_token: refreshToken }) });
       const data = await response.json();
       if (!response.ok) {
-        localStorage.removeItem("workforce.session");
-        throw new Error(data?.message || "로그인 시간이 만료되었습니다. 다시 로그인해 주세요.");
+        localStorage.removeItem('workforce.session');
+        throw new Error(data?.message || '로그인 시간이 만료됐습니다. 다시 로그인해 주세요.');
       }
-
       return saveStoredSession(stored, data);
     }
-
     async function getValidStoredSession() {
       const stored = getStoredSession();
-      if (!stored?.auth?.access_token || !stored?.profile) {
-        throw new Error("관리자 로그인 정보가 없습니다. 다시 로그인해 주세요.");
-      }
-
+      if (!stored?.auth?.access_token || !stored?.profile) throw new Error('관리자 로그인 정보가 없습니다. 다시 로그인해 주세요.');
       const expiresAt = Number(stored.auth.expires_at || 0);
-      if (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 60) {
-        return refreshStoredSession(stored);
-      }
-
+      if (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 60) return refreshStoredSession(stored);
       return stored;
     }
-
     async function supabaseRest(path, options = {}, retry = true) {
       const stored = await getValidStoredSession();
-      const response = await fetch(`${window.SUPABASE_URL}/rest/v1/${path}`, {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          apikey: window.SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${stored.auth.access_token}`,
-          ...(options.headers || {})
-        }
-      });
-
+      const response = await fetch(`${window.SUPABASE_URL}/rest/v1/${path}`, { ...options, headers: { 'Content-Type': 'application/json', apikey: window.SUPABASE_ANON_KEY, Authorization: `Bearer ${stored.auth.access_token}`, ...(options.headers || {}) } });
       const text = await response.text();
       const data = text ? JSON.parse(text) : null;
-
       if (!response.ok) {
         const message = data?.message || data?.msg || response.statusText;
         if (retry && /jwt expired/i.test(message)) {
@@ -352,583 +211,348 @@
         }
         throw new Error(message);
       }
-
       return data;
     }
-
     function redirectToLogin(message) {
-      const params = new URLSearchParams({
-        redirect: "assignment.html",
-        role: "admin",
-        message
-      });
+      const params = new URLSearchParams({ redirect: 'assignment.html', role: 'admin', message });
       window.location.href = `index.html?${params.toString()}`;
     }
-
-    function formatDate(value) {
-      if (!value) return "-";
-      return new Date(`${value}T00:00:00`).toLocaleDateString("ko-KR");
-    }
-
-    function getAssignedCount(requestId) {
-      return state.assignments.filter((assignment) => assignment.request_id === requestId).length;
-    }
-
-    function buildRequestStatus(request, assignedCount = getAssignedCount(request.id)) {
-      const headcount = Number(request.headcount || 0);
-      if (headcount > 0 && assignedCount >= headcount) return "배치완료";
-      if (assignedCount > 0) return `${assignedCount}/${headcount}명 배치중`;
-      return "대기";
-    }
-
-    function statusClass(status) {
-      if (status === "배치완료") return "complete";
-      if (String(status || "").includes("배치중")) return "progress";
-      return "waiting";
-    }
-
+    function formatDate(value) { return value ? new Date(`${value}T00:00:00`).toLocaleDateString('ko-KR') : '-'; }
     function renderSession() {
       if (!state.profile) {
-        sessionBar.innerHTML = `<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>`;
+        sessionBar.innerHTML = '<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>';
         return;
       }
-
-      sessionBar.innerHTML = `
-        <span><strong>${escapeHtml(state.profile.name)}</strong> · 관리자 · ${escapeHtml(state.profile.login_id || "")}</span>
-        <span class="session-actions">
-          <a class="session-link" href="main.html">메인</a>
-          <a class="session-link" href="assignment-history.html">배치내역</a>
-        </span>
-      `;
+      sessionBar.innerHTML = `<span><strong>${escapeHtml(state.profile.name)}</strong> · 관리자 · ${escapeHtml(state.profile.login_id || '')}</span><span class="session-actions"><a class="session-link" href="main.html">메인</a><a class="session-link" href="assignment-history.html">배치내역</a></span>`;
     }
-
     function renderRequests() {
       if (state.requests.length === 0) {
         requestsTable.innerHTML = '<tr><td colspan="6" class="empty">등록된 현장 요청이 없습니다.</td></tr>';
         return;
       }
-
       const clientMap = new Map(state.clients.map((client) => [client.id, client]));
-      requestsTable.innerHTML = state.requests
-        .map((request) => {
-          const client = clientMap.get(request.client_id);
-          const assignedCount = getAssignedCount(request.id);
-          const status = buildRequestStatus(request, assignedCount);
-          return `
-            <tr>
-              <td>${escapeHtml(client?.name || "-")}</td>
-              <td>${escapeHtml(formatContactMethod(request.contact_method))}</td>
-              <td>${assignedCount}/${Number(request.headcount || 0)}명</td>
-              <td>${escapeHtml(request.site_location || "-")}</td>
-              <td>${formatDate(request.work_date)}</td>
-              <td><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></td>
-            </tr>
-          `;
-        })
-        .join("");
+      requestsTable.innerHTML = state.requests.map((request) => {
+        const client = clientMap.get(request.client_id);
+        const assignedCount = getAssignedCount(request.id);
+        const status = buildRequestStatus(request, assignedCount);
+        return `<tr><td>${escapeHtml(client?.name || '-')}</td><td>${escapeHtml(formatContactMethod(request.contact_method))}</td><td>${assignedCount}/${Number(request.headcount || 0)}명</td><td>${escapeHtml(request.site_location || '-')}</td><td>${formatDate(request.work_date)}</td><td><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></td></tr>`;
+      }).join('');
     }
-
     function renderWorkers() {
       const visibleWorkers = buildVisibleWorkers();
-
       if (visibleWorkers.length === 0) {
         workerChips.innerHTML = '<p class="empty">등록된 인력이 없습니다.</p>';
         workerPicker.innerHTML = '<p class="empty">등록된 인력이 없습니다.</p>';
         return;
       }
-
-      workerChips.innerHTML = visibleWorkers
-        .map((worker) => `<span class="chip">${escapeHtml(worker.name)} · ${escapeHtml(worker.phone || "연락처 없음")}</span>`)
-        .join("");
-
-      workerPicker.innerHTML = visibleWorkers
-        .map((worker) => `
-          <label class="direct-worker-option">
-            <input
-              type="checkbox"
-              name="workerIds"
-              data-raw-name="${escapeHtml(worker.name || "")}"
-              data-raw-phone="${escapeHtml(worker.phone || "")}"
-              data-profile-id="${escapeHtml(worker.profileId || "")}"
-              data-worker-record-id="${escapeHtml(worker.workerRecordId || "")}"
-            />
-            <span>${escapeHtml(worker.name)} (${escapeHtml(worker.phone || "연락처 없음")})</span>
-          </label>
-        `)
-        .join("");
+      workerChips.innerHTML = visibleWorkers.map((worker) => `<span class="chip">${escapeHtml(worker.name)} · ${escapeHtml(worker.phone || '연락처 없음')}</span>`).join('');
+      workerPicker.innerHTML = visibleWorkers.map((worker) => `
+        <label class="direct-worker-option">
+          <input type="checkbox" name="workerIds" data-raw-name="${escapeHtml(worker.name || '')}" data-raw-phone="${escapeHtml(worker.phone || '')}" data-profile-id="${escapeHtml(worker.profileId || '')}" data-worker-record-id="${escapeHtml(worker.workerRecordId || '')}" />
+          <span>${escapeHtml(worker.name)} (${escapeHtml(worker.phone || '연락처 없음')})</span>
+        </label>
+      `).join('');
     }
-
     function renderRequestOptions() {
       if (state.requests.length === 0) {
         requestSelect.innerHTML = '<option value="">현장 요청이 없습니다.</option>';
         return;
       }
-
       const clientMap = new Map(state.clients.map((client) => [client.id, client]));
-      requestSelect.innerHTML = state.requests
-        .map((request) => {
-          const client = clientMap.get(request.client_id);
-          const status = buildRequestStatus(request);
-          return `
-            <option value="${request.id}">
-              [${status}] ${escapeHtml(client?.name || "-")} / ${escapeHtml(request.site_location || "-")} / ${Number(request.headcount || 0)}명
-            </option>
-          `;
-        })
-        .join("");
+      requestSelect.innerHTML = state.requests.map((request) => {
+        const client = clientMap.get(request.client_id);
+        const status = buildRequestStatus(request);
+        return `<option value="${request.id}">[${status}] ${escapeHtml(client?.name || '-')} / ${escapeHtml(request.site_location || '-')} / ${Number(request.headcount || 0)}명</option>`;
+      }).join('');
     }
-
     async function loadWorkerProfiles() {
-      return supabaseRest("profiles?select=id,role,name,phone,worker_id,login_id&role=eq.worker&order=created_at.desc");
+      return supabaseRest('profiles?select=id,role,name,phone,worker_id,login_id&role=eq.worker&order=created_at.desc');
     }
-
-    async function reconcileWorkerProfiles(profiles) {
-      let changed = false;
-      const reconciledProfiles = [];
-
-      for (const profile of profiles || []) {
-        try {
-          const reconciled = await ensureWorkerBridge(profile, {
-            rawName: profile.name || "",
-            rawPhone: profile.phone || "",
-            name: normalizeText(profile.name || ""),
-            phone: normalizePhone(profile.phone || "")
-          });
-
-          if (reconciled.worker_id !== profile.worker_id
-            || reconciled.name !== profile.name
-            || normalizePhone(reconciled.phone) !== normalizePhone(profile.phone)) {
-            changed = true;
-          }
-
-          reconciledProfiles.push(reconciled);
-        } catch (error) {
-          reconciledProfiles.push(profile);
-        }
-      }
-
-      return {
-        profiles: reconciledProfiles,
-        changed
-      };
+    function getWorkerAssignmentCount(workerId) { return (state.assignments || []).filter((assignment) => assignment.worker_id === workerId).length; }
+    function getWorkerProfileLinkCount(workerId) { return (state.workerProfiles || []).filter((profile) => profile.worker_id === workerId).length; }
+    function updateStateWorker(nextWorker) {
+      const others = (state.workers || []).filter((worker) => worker.id !== nextWorker.id);
+      state.workers = [nextWorker, ...others];
     }
-
-    async function loadDashboard() {
-      const [clients, requests, workers, workerProfiles, assignments] = await Promise.all([
-        supabaseRest("clients?select=*&order=name.asc"),
-        supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc"),
-        supabaseRest("workers?select=*&order=created_at.desc"),
-        loadWorkerProfiles(),
-        supabaseRest("assignments?select=*&order=created_at.desc")
-      ]);
-
-      const reconciled = await reconcileWorkerProfiles(workerProfiles || []);
-      const latestWorkers = reconciled.changed
-        ? await supabaseRest("workers?select=*&order=created_at.desc")
-        : workers;
-
-      state.clients = clients || [];
-      state.requests = requests || [];
-      state.workers = latestWorkers || [];
-      state.workerProfiles = reconciled.profiles || [];
-      state.assignments = assignments || [];
-
-      renderRequests();
-      renderWorkers();
-      renderRequestOptions();
+    function updateStateWorkerProfile(nextProfile) {
+      const others = (state.workerProfiles || []).filter((profile) => profile.id !== nextProfile.id);
+      state.workerProfiles = [nextProfile, ...others];
     }
-
-    async function upsertRequestStatus(requestId) {
-      const request = state.requests.find((item) => item.id === requestId);
-      if (!request) return;
-
-      const currentAssignments = await supabaseRest(`assignments?select=id,worker_id&request_id=eq.${requestId}`);
-      const nextStatus = buildRequestStatus(request, currentAssignments.length);
-
-      await supabaseRest(`job_requests?id=eq.${requestId}`, {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ status: nextStatus })
-      });
-
-      if (currentAssignments.length > 0) {
-        await supabaseRest("work_logs?on_conflict=assignment_id", {
-          method: "POST",
-          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-          body: JSON.stringify(
-            currentAssignments.map((assignment) => ({
-              assignment_id: assignment.id,
-              worker_id: assignment.worker_id
-            }))
-          )
-        });
-      }
+    function matchesWorkerIdentity(worker, selectedWorker) {
+      const workerPhone = normalizePhone(worker?.phone || '');
+      const workerName = normalizeText(worker?.name || '');
+      const targetPhone = selectedWorker.phone || normalizePhone(selectedWorker.rawPhone || '');
+      const targetName = selectedWorker.name || normalizeText(selectedWorker.rawName || '');
+      if (targetPhone && workerPhone === targetPhone) return true;
+      if (!targetPhone && targetName && workerName === targetName) return true;
+      return false;
     }
-
-    function readCheckedWorkers() {
-      return Array.from(document.querySelectorAll("#directWorkerPicker input[name='workerIds']:checked"))
-        .map((input) => ({
-          rawName: String(input.dataset.rawName || "").trim(),
-          rawPhone: String(input.dataset.rawPhone || "").trim(),
-          name: normalizeText(input.dataset.rawName || ""),
-          phone: normalizePhone(input.dataset.rawPhone || ""),
-          profileId: String(input.dataset.profileId || "").trim(),
-          workerRecordId: String(input.dataset.workerRecordId || "").trim()
-        }))
-        .filter((worker) => worker.name || worker.phone);
+    function findMatchingWorkers(selectedWorker) {
+      return (state.workers || []).filter((worker) => matchesWorkerIdentity(worker, selectedWorker));
     }
-
+    function bestWorkerScore(worker, selectedWorker) {
+      const workerPhone = normalizePhone(worker?.phone || '');
+      const workerName = normalizeText(worker?.name || '');
+      const targetPhone = selectedWorker.phone || normalizePhone(selectedWorker.rawPhone || '');
+      const targetName = selectedWorker.name || normalizeText(selectedWorker.rawName || '');
+      let score = 0;
+      score += getWorkerAssignmentCount(worker.id) * 1000;
+      score += getWorkerProfileLinkCount(worker.id) * 200;
+      if (targetPhone && workerPhone === targetPhone) score += 100;
+      if (targetName && workerName === targetName) score += 80;
+      if (!isPlaceholderName(worker?.name)) score += 20;
+      if (selectedWorker.workerRecordId && worker.id === selectedWorker.workerRecordId) score += 10;
+      return score;
+    }
+    function pickBestWorkerRecord(selectedWorker, candidates = findMatchingWorkers(selectedWorker)) {
+      return [...(candidates || [])].sort((left, right) => bestWorkerScore(right, selectedWorker) - bestWorkerScore(left, selectedWorker))[0] || null;
+    }
     function findWorkerProfileByIdentity(profiles, selectedWorker) {
-      const targetPhone = selectedWorker.phone || normalizePhone(selectedWorker.rawPhone);
-      const targetName = selectedWorker.name || normalizeText(selectedWorker.rawName);
-
+      const targetPhone = selectedWorker.phone || normalizePhone(selectedWorker.rawPhone || '');
+      const targetName = selectedWorker.name || normalizeText(selectedWorker.rawName || '');
       if (targetPhone) {
         const byPhone = (profiles || []).find((profile) => normalizePhone(profile.phone) === targetPhone);
         if (byPhone) return byPhone;
       }
-
-      if (targetName) {
-        return (profiles || []).find((profile) => normalizeText(profile.name) === targetName) || null;
-      }
-
+      if (targetName) return (profiles || []).find((profile) => normalizeText(profile.name) === targetName) || null;
       return null;
     }
-
-    function buildWorkerLoginId(selectedWorker) {
-      const phonePart = (selectedWorker.phone || normalizePhone(selectedWorker.rawPhone) || Date.now().toString()).slice(-8);
-      const timePart = Date.now().toString().slice(-6);
-      return `worker_${phonePart}_${timePart}`;
+    async function createWorkerRecord(selectedWorker) {
+      const created = await supabaseRest('workers', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ name: selectedWorker.rawName || selectedWorker.name || '작업자', phone: normalizePhone(selectedWorker.rawPhone || selectedWorker.phone || '') }) });
+      const worker = created?.[0];
+      if (!worker?.id) throw new Error('인력 정보를 저장하지 못했습니다.');
+      updateStateWorker(worker);
+      return worker;
     }
-
-    function signupEmail(loginId) {
-      const safeId = String(loginId || "").trim().toLowerCase().replace(/[^a-z0-9._-]/g, "_");
-      return `${safeId}@yangpyeongsafety.app`;
+    async function patchWorkerRecord(worker, patch) {
+      if (!worker?.id || Object.keys(patch).length === 0) return worker;
+      if (Object.prototype.hasOwnProperty.call(patch, 'phone')) patch.phone = normalizePhone(patch.phone);
+      await supabaseRest(`workers?id=eq.${worker.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+      const nextWorker = { ...worker, ...patch };
+      updateStateWorker(nextWorker);
+      return nextWorker;
     }
-
-    function buildWorkerPassword() {
-      return `Worker!${Math.random().toString(36).slice(2, 10)}${Date.now().toString().slice(-4)}`;
+    async function patchWorkerProfile(profile, patch) {
+      if (!profile?.id || Object.keys(patch).length === 0) return profile;
+      if (Object.prototype.hasOwnProperty.call(patch, 'phone')) patch.phone = normalizePhone(patch.phone);
+      await supabaseRest(`profiles?id=eq.${profile.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+      const nextProfile = { ...profile, ...patch };
+      updateStateWorkerProfile(nextProfile);
+      return nextProfile;
     }
-
-    function preferredWorkerName(profile, selectedWorker) {
-      if (!isPlaceholderName(selectedWorker?.rawName)) {
-        return selectedWorker.rawName;
-      }
-      if (!isPlaceholderName(profile?.name)) {
-        return profile.name;
-      }
-      return "작업자";
+    async function ensureProfileBridge(profile, selectedWorker) {
+      const { worker, profile: ensuredProfile } = await ensureWorkerRecord({
+        ...selectedWorker,
+        rawPhone: normalizePhone(selectedWorker.rawPhone || profile.phone || ''),
+        phone: normalizePhone(selectedWorker.phone || selectedWorker.rawPhone || profile.phone || ''),
+        workerRecordId: selectedWorker.workerRecordId || profile.worker_id || ''
+      }, profile);
+      return { id: worker?.id || ensuredProfile?.worker_id || profile.worker_id || '', profile: ensuredProfile || profile, worker };
     }
-
-    async function ensureWorkerBridge(profile, selectedWorker) {
-      const bridgeId = profile.id;
-      const bridgeName = preferredWorkerName(profile, selectedWorker);
-      const bridgePhone = selectedWorker.rawPhone || profile.phone || null;
-
-      const existingWorker = await supabaseRest(`workers?select=id,name,phone&id=eq.${bridgeId}`);
-      if (!existingWorker?.[0]?.id) {
-        await supabaseRest("workers", {
-          method: "POST",
-          headers: { Prefer: "return=representation" },
-          body: JSON.stringify({
-            id: bridgeId,
-            name: bridgeName,
-            phone: bridgePhone
-          })
-        });
-      } else if (
-        (isPlaceholderName(existingWorker[0].name) && !isPlaceholderName(bridgeName))
-        || (bridgePhone && normalizePhone(existingWorker[0].phone) !== normalizePhone(bridgePhone))
-      ) {
-        await supabaseRest(`workers?id=eq.${bridgeId}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=minimal" },
-          body: JSON.stringify({
-            name: bridgeName,
-            phone: bridgePhone
-          })
-        });
-      }
-
-      const profilePatch = {};
-      if (profile.worker_id !== bridgeId) {
-        profilePatch.worker_id = bridgeId;
-      }
-      if (isPlaceholderName(profile.name) && !isPlaceholderName(bridgeName)) {
-        profilePatch.name = bridgeName;
-      }
-      if (bridgePhone && normalizePhone(profile.phone) !== normalizePhone(bridgePhone)) {
-        profilePatch.phone = bridgePhone;
-      }
-
-      if (Object.keys(profilePatch).length > 0) {
-        await supabaseRest(`profiles?id=eq.${profile.id}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=minimal" },
-          body: JSON.stringify(profilePatch)
-        });
-        return {
-          ...profile,
-          ...profilePatch
-        };
-      }
-
-      return {
-        ...profile,
-        worker_id: bridgeId,
-        name: !isPlaceholderName(profile.name) ? profile.name : bridgeName,
-        phone: profile.phone || bridgePhone || ""
-      };
+    function preferredWorkerLabel(selectedWorker, profile = null, worker = null) {
+      if (!isPlaceholderName(selectedWorker?.rawName)) return selectedWorker.rawName;
+      if (!isPlaceholderName(profile?.name)) return profile.name;
+      if (!isPlaceholderName(worker?.name)) return worker.name;
+      return '작업자';
     }
-
-    async function waitForWorkerProfile(profileId, selectedWorker) {
-      for (let attempt = 0; attempt < 10; attempt += 1) {
-        const profiles = await loadWorkerProfiles();
-        state.workerProfiles = profiles || [];
-
-        const byId = (state.workerProfiles || []).find((profile) => profile.id === profileId);
-        if (byId?.id) return byId;
-
-        const byIdentity = findWorkerProfileByIdentity(state.workerProfiles, selectedWorker);
-        if (byIdentity?.id) return byIdentity;
-
-        await sleep(300);
+    async function ensureWorkerRecord(selectedWorker, profile = null) {
+      const preferredPhone = normalizePhone(selectedWorker.rawPhone || selectedWorker.phone || profile?.phone || '');
+      let worker = null;
+      if (selectedWorker.workerRecordId) {
+        const verifiedWorker = await supabaseRest(`workers?select=id,name,phone&id=eq.${selectedWorker.workerRecordId}`);
+        worker = verifiedWorker?.[0] || null;
       }
-
-      return null;
+      if (!worker && profile?.worker_id) {
+        const linkedWorker = await supabaseRest(`workers?select=id,name,phone&id=eq.${profile.worker_id}`);
+        worker = linkedWorker?.[0] || null;
+      }
+      if (!worker) worker = pickBestWorkerRecord(selectedWorker);
+      if (!worker) worker = await createWorkerRecord(selectedWorker);
+      const preferredName = preferredWorkerLabel(selectedWorker, profile, worker);
+      const workerPatch = {};
+      if (isPlaceholderName(worker.name) && !isPlaceholderName(preferredName)) workerPatch.name = preferredName;
+      if (preferredPhone && normalizePhone(worker.phone) !== normalizePhone(preferredPhone)) workerPatch.phone = preferredPhone;
+      worker = await patchWorkerRecord(worker, workerPatch);
+      if (profile?.id) {
+        const profilePatch = {};
+        if (profile.worker_id !== worker.id) profilePatch.worker_id = worker.id;
+        if (isPlaceholderName(profile.name) && !isPlaceholderName(preferredName)) profilePatch.name = preferredName;
+        if (preferredPhone && normalizePhone(profile.phone) !== normalizePhone(preferredPhone)) profilePatch.phone = preferredPhone;
+        profile = await patchWorkerProfile(profile, profilePatch);
+      }
+      return { worker, profile };
     }
-
-    async function createWorkerProfile(selectedWorker) {
-      const loginId = buildWorkerLoginId(selectedWorker);
-      const response = await fetch(`${window.SUPABASE_URL}/auth/v1/signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: window.SUPABASE_ANON_KEY
-        },
-        body: JSON.stringify({
-          email: signupEmail(loginId),
-          password: buildWorkerPassword(),
-          data: {
-            login_id: loginId,
-            role: "worker",
-            name: selectedWorker.rawName || selectedWorker.name || "작업자",
-            phone: selectedWorker.rawPhone || ""
-          }
-        })
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result?.msg || result?.message || "작업자 계정을 만들지 못했습니다.");
+    async function reconcileWorkerProfiles(profiles) {
+      let changed = false;
+      const reconciledProfiles = [];
+      state.workerProfiles = profiles || [];
+      for (const profile of profiles || []) {
+        try {
+          const { profile: nextProfile } = await ensureWorkerRecord({ rawName: profile.name || '', rawPhone: profile.phone || '', name: normalizeText(profile.name || ''), phone: normalizePhone(profile.phone || ''), profileId: profile.id || '', workerRecordId: profile.worker_id || '' }, profile);
+          const reconciled = nextProfile || profile;
+          if (reconciled.worker_id !== profile.worker_id || reconciled.name !== profile.name || normalizePhone(reconciled.phone) !== normalizePhone(profile.phone)) changed = true;
+          reconciledProfiles.push(reconciled);
+        } catch {
+          reconciledProfiles.push(profile);
+        }
       }
-
-      const profileId = result?.user?.id;
-      if (!profileId) {
-        throw new Error("작업자 프로필 생성 결과를 확인할 수 없습니다.");
-      }
-
-      const profile = await waitForWorkerProfile(profileId, selectedWorker);
-      if (!profile?.id) {
-        throw new Error("작업자 프로필 연결이 완료되지 않았습니다.");
-      }
-
-      return ensureWorkerBridge(profile, selectedWorker);
+      return { profiles: reconciledProfiles, changed };
     }
-
+    async function loadDashboard() {
+      const [clients, requests, workers, workerProfiles, assignments] = await Promise.all([
+        supabaseRest('clients?select=*&order=name.asc'),
+        supabaseRest('job_requests?select=*&order=work_date.desc,created_at.desc'),
+        supabaseRest('workers?select=*&order=created_at.desc'),
+        loadWorkerProfiles(),
+        supabaseRest('assignments?select=*&order=created_at.desc')
+      ]);
+      state.clients = clients || [];
+      state.requests = requests || [];
+      state.workers = workers || [];
+      state.workerProfiles = workerProfiles || [];
+      state.assignments = assignments || [];
+      const reconciled = await reconcileWorkerProfiles(workerProfiles || []);
+      if (reconciled.changed) {
+        state.workers = await supabaseRest('workers?select=*&order=created_at.desc');
+        state.workerProfiles = await loadWorkerProfiles();
+      } else {
+        state.workerProfiles = reconciled.profiles || [];
+      }
+      renderRequests();
+      renderWorkers();
+      renderRequestOptions();
+    }
+    async function upsertRequestStatus(requestId) {
+      const request = state.requests.find((item) => item.id === requestId);
+      if (!request) return;
+      const currentAssignments = await supabaseRest(`assignments?select=id,worker_id&request_id=eq.${requestId}`);
+      const nextStatus = buildRequestStatus(request, currentAssignments.length);
+      await supabaseRest(`job_requests?id=eq.${requestId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: nextStatus }) });
+      if (currentAssignments.length > 0) {
+        await supabaseRest('work_logs?on_conflict=assignment_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(currentAssignments.map((assignment) => ({ assignment_id: assignment.id, worker_id: assignment.worker_id }))) });
+      }
+    }
+    function readCheckedWorkers() {
+      return Array.from(document.querySelectorAll("#directWorkerPicker input[name='workerIds']:checked")).map((input) => ({ rawName: String(input.dataset.rawName || '').trim(), rawPhone: normalizePhone(input.dataset.rawPhone || ''), name: normalizeText(input.dataset.rawName || ''), phone: normalizePhone(input.dataset.rawPhone || ''), profileId: String(input.dataset.profileId || '').trim(), workerRecordId: String(input.dataset.workerRecordId || '').trim() })).filter((worker) => worker.name || worker.phone);
+    }
     async function ensureWorkerProfile(selectedWorker) {
+      let profile = null;
       if (selectedWorker.profileId) {
-        const verified = await supabaseRest(
-          `profiles?select=id,role,name,phone,worker_id,login_id&id=eq.${selectedWorker.profileId}`
-        );
-        if (verified?.[0]?.id) return ensureWorkerBridge(verified[0], selectedWorker);
+        const verified = await supabaseRest(`profiles?select=id,role,name,phone,worker_id,login_id&id=eq.${selectedWorker.profileId}`);
+        profile = verified?.[0] || null;
       }
-
-      const latestProfiles = await loadWorkerProfiles();
-      state.workerProfiles = latestProfiles || [];
-
-      const matchedProfile = findWorkerProfileByIdentity(state.workerProfiles, selectedWorker);
-      if (matchedProfile?.id) return ensureWorkerBridge(matchedProfile, selectedWorker);
-
-      return createWorkerProfile(selectedWorker);
+      if (!profile) {
+        const latestProfiles = await loadWorkerProfiles();
+        state.workerProfiles = latestProfiles || [];
+        profile = findWorkerProfileByIdentity(state.workerProfiles, selectedWorker);
+      }
+      if (profile?.id) {
+        const bridged = await ensureProfileBridge(profile, selectedWorker);
+        if (bridged.profile?.id) updateStateWorkerProfile(bridged.profile);
+        return bridged;
+      }
+      const ensured = await ensureWorkerRecord(selectedWorker, profile);
+      if (ensured.profile?.id) updateStateWorkerProfile(ensured.profile);
+      return ensured.worker;
     }
-
-    async function insertAssignmentRow(requestId, workerProfileId, createdBy) {
-      await supabaseRest("assignments?on_conflict=request_id,worker_id", {
-        method: "POST",
-        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-        body: JSON.stringify({
-          request_id: requestId,
-          worker_id: workerProfileId,
-          created_by: createdBy
-        })
-      });
+    async function insertAssignmentRow(requestId, workerId, createdBy) {
+      await supabaseRest('assignments?on_conflict=request_id,worker_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ request_id: requestId, worker_id: workerId, created_by: createdBy }) });
     }
-
     async function saveAssignmentsSequentially(requestId, selectedWorkers, createdBy) {
       for (const selectedWorker of selectedWorkers) {
-        const workerProfile = await ensureWorkerProfile(selectedWorker);
-        await insertAssignmentRow(requestId, workerProfile.id, createdBy);
+        const worker = await ensureWorkerProfile(selectedWorker);
+        await insertAssignmentRow(requestId, worker.id, createdBy);
       }
     }
-
     async function handleRequestSubmit(event) {
       event.preventDefault();
       const stored = await getValidStoredSession();
       const formData = new FormData(requestForm);
-      const clientName = String(formData.get("clientName") || "").trim();
-      const contactMethod = String(formData.get("contactMethod") || "").trim();
-      const headcount = Number(formData.get("headcount") || 0);
-      const siteLocation = String(formData.get("siteLocation") || "").trim();
-      const workDate = String(formData.get("workDate") || "").trim();
-
-      if (!clientName || !contactMethod || headcount <= 0 || !siteLocation || !workDate) {
-        setMessage("현장 요청 항목을 모두 입력해 주세요.");
-        return;
-      }
-
+      const clientName = String(formData.get('clientName') || '').trim();
+      const contactMethod = String(formData.get('contactMethod') || '').trim();
+      const headcount = Number(formData.get('headcount') || 0);
+      const siteLocation = String(formData.get('siteLocation') || '').trim();
+      const workDate = String(formData.get('workDate') || '').trim();
+      if (!clientName || !contactMethod || headcount <= 0 || !siteLocation || !workDate) { setMessage('현장 요청 항목을 모두 입력해 주세요.'); return; }
       try {
-        setMessage("현장 요청을 저장하는 중입니다...", false);
-
-        const clients = await supabaseRest("clients?on_conflict=name", {
-          method: "POST",
-          headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-          body: JSON.stringify({
-            name: clientName,
-            created_by: stored.profile.id
-          })
-        });
-
+        setMessage('현장 요청을 저장하는 중입니다...', false);
+        const clients = await supabaseRest('clients?on_conflict=name', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ name: clientName, created_by: stored.profile.id }) });
         const client = clients?.[0];
-        if (!client?.id) {
-          throw new Error("업체 정보를 저장하지 못했습니다.");
-        }
-
-        await supabaseRest("job_requests", {
-          method: "POST",
-          headers: { Prefer: "return=representation" },
-          body: JSON.stringify({
-            client_id: client.id,
-            contact_method: contactMethod,
-            headcount,
-            site_location: siteLocation,
-            work_date: workDate,
-            status: "대기",
-            created_by: stored.profile.id
-          })
-        });
-
+        if (!client?.id) throw new Error('업체 정보를 저장하지 못했습니다.');
+        await supabaseRest('job_requests', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ client_id: client.id, contact_method: contactMethod, headcount, site_location: siteLocation, work_date: workDate, status: '대기', created_by: stored.profile.id }) });
         requestForm.reset();
         await loadDashboard();
-        setMessage("현장 요청이 저장되었습니다.", false);
+        setMessage('현장 요청이 저장되었습니다.', false);
       } catch (error) {
         setMessage(`현장 요청 저장 실패: ${error.message}`);
       }
     }
-
     async function handleWorkerSubmit(event) {
       event.preventDefault();
       const formData = new FormData(workerForm);
-      const name = String(formData.get("name") || "").trim();
-      const phone = String(formData.get("phone") || "").trim();
-
-      if (!name || !phone) {
-        setMessage("인력 이름과 연락처를 모두 입력해 주세요.");
-        return;
-      }
-
+      const name = String(formData.get('name') || '').trim();
+      const phone = normalizePhone(formData.get('phone'));
+      syncWorkerPhoneInput();
+      if (!name || !phone) { setMessage('인력 이름과 연락처를 모두 입력해 주세요.'); return; }
       const visibleWorkers = buildVisibleWorkers();
-      const identity = {
-        rawName: name,
-        rawPhone: phone,
-        name: normalizeText(name),
-        phone: normalizePhone(phone)
-      };
-
+      const identity = { rawName: name, rawPhone: phone, name: normalizeText(name), phone: normalizePhone(phone) };
       const existing = visibleWorkers.find((worker) => identityKey(worker) === identityKey(identity));
-      if (existing?.profileId) {
-        setMessage("이미 등록된 인력입니다.");
-        return;
-      }
-
+      if (existing?.workerRecordId) { setMessage('이미 등록된 인력입니다.'); return; }
       try {
-        setMessage(existing ? "기존 인력 계정을 연결하는 중입니다..." : "인력 계정을 만드는 중입니다...", false);
-
-        await ensureWorkerProfile({
-          rawName: existing?.name || name,
-          rawPhone: existing?.phone || phone,
-          name: normalizeText(existing?.name || name),
-          phone: normalizePhone(existing?.phone || phone),
-          profileId: existing?.profileId || ""
-        });
-
+        setMessage(existing ? '기존 인력 연결을 정리하는 중입니다...' : '인력을 등록하는 중입니다...', false);
+        await ensureWorkerProfile({ rawName: existing?.name || name, rawPhone: existing?.phone || phone, name: normalizeText(existing?.name || name), phone: normalizePhone(existing?.phone || phone), profileId: existing?.profileId || '', workerRecordId: existing?.workerRecordId || '' });
         workerForm.reset();
         await loadDashboard();
-        setMessage(existing ? "기존 인력을 배정 가능한 계정으로 연결했습니다." : "인력이 등록되었습니다.", false);
+        setMessage(existing ? '기존 인력 연결을 정리했습니다.' : '인력을 등록했습니다.', false);
       } catch (error) {
         setMessage(`인력 등록 실패: ${error.message}`);
       }
     }
-
     async function handleAssignmentSubmit(event) {
       event.preventDefault();
       const stored = await getValidStoredSession();
-      const requestId = String(new FormData(assignmentForm).get("requestId") || "").trim();
+      const requestId = String(new FormData(assignmentForm).get('requestId') || '').trim();
       const selectedWorkers = readCheckedWorkers();
-
-      if (!requestId || selectedWorkers.length === 0) {
-        setMessage("현장 요청과 배정 인력을 선택해 주세요.");
-        return;
-      }
-
+      if (!requestId || selectedWorkers.length === 0) { setMessage('현장 요청과 배정 인력을 선택해 주세요.'); return; }
       try {
-        setMessage("배정을 저장하는 중입니다...", false);
-
-        const latestRequests = await supabaseRest("job_requests?select=id");
+        setMessage('배정을 저장하는 중입니다...', false);
+        const latestRequests = await supabaseRest('job_requests?select=id');
         const validRequestIds = new Set((latestRequests || []).map((request) => request.id));
         if (!validRequestIds.has(requestId)) {
           await loadDashboard();
-          setMessage("선택한 현장 요청을 찾을 수 없습니다. 다시 불러온 뒤 시도해 주세요.");
+          setMessage('선택한 현장 요청을 찾을 수 없습니다. 다시 불러온 뒤 재시도해 주세요.');
           return;
         }
-
         await saveAssignmentsSequentially(requestId, selectedWorkers, stored.profile.id);
         await upsertRequestStatus(requestId);
-
         assignmentForm.reset();
         await loadDashboard();
-
         const request = state.requests.find((item) => item.id === requestId);
         const assignedCount = getAssignedCount(requestId);
-        const status = request ? buildRequestStatus(request, assignedCount) : "배치완료";
+        const status = request ? buildRequestStatus(request, assignedCount) : '배치완료';
         setMessage(`배정이 저장되었습니다. 현재 상태: ${status}`, false);
       } catch (error) {
         await loadDashboard().catch(() => {});
         setMessage(`배정 저장 실패: ${error.message}`);
       }
     }
-
     async function bootstrap() {
       try {
         const stored = await getValidStoredSession();
-        if (stored.profile.role !== "admin") {
-          redirectToLogin("관리자 계정으로 로그인해 주세요.");
-          return;
-        }
-
+        if (stored.profile.role !== 'admin') { redirectToLogin('관리자 계정으로 로그인해 주세요.'); return; }
         state.profile = stored.profile;
         renderSession();
-        setMessage("현장 배정 데이터를 불러오는 중입니다...", false);
+        setMessage('현장 배정 데이터를 불러오는 중입니다...', false);
         await loadDashboard();
-        setMessage("현장 배정 페이지가 준비되었습니다.", false);
+        setMessage('현장 배정 페이지가 준비되었습니다.', false);
       } catch (error) {
         redirectToLogin(error.message);
       }
     }
-
-    requestForm.addEventListener("submit", handleRequestSubmit);
-    workerForm.addEventListener("submit", handleWorkerSubmit);
-    assignmentForm.addEventListener("submit", handleAssignmentSubmit);
-
+    requestForm.addEventListener('submit', handleRequestSubmit);
+    workerForm.addEventListener('submit', handleWorkerSubmit);
+    assignmentForm.addEventListener('submit', handleAssignmentSubmit);
+    workerPhoneInput?.addEventListener('input', syncWorkerPhoneInput);
     bootstrap();
   </script>
 </body>

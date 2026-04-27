@@ -53,7 +53,8 @@
           </label>
           <label>
             연락처
-            <input type="text" name="phone" placeholder="010-0000-0000" />
+            <input type="text" name="phone" placeholder="01012345678" inputmode="numeric" />
+            <small>전화번호는 - 없이 숫자만 입력해 주세요.</small>
           </label>
           <label>
             아이디
@@ -75,6 +76,7 @@
   <script>
     const signupForm = document.getElementById("signupForm");
     const authMessage = document.getElementById("authMessage");
+    const signupPhoneInput = signupForm?.querySelector('input[name="phone"]');
 
     function setSignupMessage(message, isError = true) {
       authMessage.textContent = message;
@@ -87,6 +89,10 @@
         .toLowerCase()
         .replace(/[^a-z0-9._-]/g, "_");
       return `${safeId}@yangpyeongsafety.app`;
+    }
+
+    function normalizePhone(value) {
+      return String(value || "").replace(/\D+/g, "");
     }
 
     window.directSignup = async function directSignup(event) {
@@ -105,9 +111,13 @@
       const formData = new FormData(signupForm);
       const role = formData.get("role");
       const name = String(formData.get("name") || "").trim();
-      const phone = String(formData.get("phone") || "").trim();
+      const phone = normalizePhone(formData.get("phone"));
       const loginId = String(formData.get("signupId") || "").trim();
       const password = String(formData.get("signupPassword") || "").trim();
+
+      if (signupPhoneInput) {
+        signupPhoneInput.value = phone;
+      }
 
       if (!name || !loginId || !password) {
         setSignupMessage("회원가입 항목을 모두 입력해 주세요.");
@@ -149,6 +159,10 @@
 
       return false;
     };
+
+    signupPhoneInput?.addEventListener("input", () => {
+      signupPhoneInput.value = normalizePhone(signupPhoneInput.value);
+    });
 
     setSignupMessage("회원가입 준비 완료. 정보를 입력하고 버튼을 눌러주세요.", false);
   </script>

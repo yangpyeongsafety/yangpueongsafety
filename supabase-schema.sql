@@ -127,6 +127,70 @@ create trigger work_logs_updated_at
 before update on public.work_logs
 for each row execute procedure public.handle_updated_at();
 
+create or replace function public.normalize_phone(phone_value text)
+returns text
+language sql
+immutable
+as $$
+  select nullif(regexp_replace(coalesce(phone_value, ''), '\D', '', 'g'), '');
+$$;
+
+create or replace function public.handle_normalize_phone()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.phone := public.normalize_phone(new.phone);
+  return new;
+end;
+$$;
+
+drop trigger if exists workers_normalize_phone on public.workers;
+create trigger workers_normalize_phone
+before insert or update on public.workers
+for each row execute procedure public.handle_normalize_phone();
+
+drop trigger if exists profiles_normalize_phone on public.profiles;
+create trigger profiles_normalize_phone
+before insert or update on public.profiles
+for each row execute procedure public.handle_normalize_phone();
+
+update public.workers
+set phone = public.normalize_phone(phone)
+where phone is distinct from public.normalize_phone(phone);
+
+update public.profiles
+set phone = public.normalize_phone(phone)
+where phone is distinct from public.normalize_phone(phone);
+
+with matched_workers as (
+  select
+    p.id as profile_id,
+    (
+      select w.id
+      from public.workers w
+      where public.normalize_phone(w.phone) = public.normalize_phone(p.phone)
+      order by w.created_at asc
+      limit 1
+    ) as worker_id
+  from public.profiles p
+  where p.role = 'worker'
+    and public.normalize_phone(p.phone) is not null
+    and (
+      p.worker_id is null
+      or not exists (
+        select 1
+        from public.workers current_worker
+        where current_worker.id = p.worker_id
+      )
+    )
+)
+update public.profiles p
+set worker_id = matched_workers.worker_id
+from matched_workers
+where p.id = matched_workers.profile_id
+  and matched_workers.worker_id is not null;
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -142,16 +206,28 @@ declare
 begin
   meta_role := coalesce(new.raw_user_meta_data->>'role', 'worker');
   meta_name := coalesce(new.raw_user_meta_data->>'name', '');
-  meta_phone := new.raw_user_meta_data->>'phone';
+  meta_phone := public.normalize_phone(new.raw_user_meta_data->>'phone');
   meta_login_id := coalesce(new.raw_user_meta_data->>'login_id', split_part(new.email, '@', 1));
 
   if meta_role = 'worker' then
-    select id
-      into matched_worker_id
-    from public.workers
-    where name = meta_name
-      and coalesce(phone, '') = coalesce(meta_phone, '')
-    limit 1;
+    if meta_phone is not null then
+      select id
+        into matched_worker_id
+      from public.workers
+      where public.normalize_phone(phone) = meta_phone
+      order by created_at asc
+      limit 1;
+    end if;
+
+    if matched_worker_id is null and meta_name <> '' then
+      select id
+        into matched_worker_id
+      from public.workers
+      where name = meta_name
+        and coalesce(public.normalize_phone(phone), '') = coalesce(meta_phone, '')
+      order by created_at asc
+      limit 1;
+    end if;
 
     if matched_worker_id is null then
       insert into public.workers (name, phone)
@@ -175,13 +251,28 @@ for each row execute procedure public.handle_new_user();
 create or replace function public.is_admin()
 returns boolean
 language sql
+security definer
 stable
+set search_path = public
 as $$
   select exists (
     select 1
     from public.profiles
     where id = auth.uid() and role = 'admin'
   );
+$$;
+
+create or replace function public.current_worker_id()
+returns uuid
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select worker_id
+  from public.profiles
+  where id = auth.uid()
+  limit 1;
 $$;
 
 alter table public.workers enable row level security;
@@ -218,7 +309,7 @@ to authenticated
 using (
   public.is_admin()
   or id in (
-    select worker_id from public.profiles where id = auth.uid()
+    select public.current_worker_id()
   )
 );
 
@@ -245,8 +336,7 @@ using (
   or id in (
     select a.request_id
     from public.assignments a
-    join public.profiles p on p.worker_id = a.worker_id
-    where p.id = auth.uid()
+    where a.worker_id = public.current_worker_id()
   )
 );
 
@@ -264,7 +354,7 @@ to authenticated
 using (
   public.is_admin()
   or worker_id in (
-    select worker_id from public.profiles where id = auth.uid()
+    select public.current_worker_id()
   )
 );
 
@@ -282,7 +372,7 @@ to authenticated
 using (
   public.is_admin()
   or worker_id in (
-    select worker_id from public.profiles where id = auth.uid()
+    select public.current_worker_id()
   )
 );
 
@@ -292,7 +382,7 @@ on public.work_logs for insert
 to authenticated
 with check (
   worker_id in (
-    select worker_id from public.profiles where id = auth.uid()
+    select public.current_worker_id()
   )
 );
 
@@ -302,11 +392,11 @@ on public.work_logs for update
 to authenticated
 using (
   worker_id in (
-    select worker_id from public.profiles where id = auth.uid()
+    select public.current_worker_id()
   )
 )
 with check (
   worker_id in (
-    select worker_id from public.profiles where id = auth.uid()
+    select public.current_worker_id()
   )
 );

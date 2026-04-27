@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>배치내역</title>
+  <title>Assignment History</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -15,17 +15,16 @@
 <body data-page="assignment-history" data-role="admin">
   <div class="app-shell">
     <div class="session-bar" id="sessionBar"></div>
-
     <header class="hero">
       <div>
-        <p class="eyebrow">배치내역</p>
-        <h1>저장된 현장 배치 표</h1>
-        <p class="hero-copy">배정 저장이 완료된 현장만 이 표에 표시됩니다.</p>
+        <p class="eyebrow">ASSIGNMENT HISTORY</p>
+        <h1>Assigned Site Summary</h1>
+        <p class="hero-copy">Check each site, assigned worker list, and matched phone numbers in one place.</p>
       </div>
       <nav class="top-nav">
-        <a href="main.html">메인</a>
-        <a href="assignment.html">현장 배정</a>
-        <a class="ghost-btn" href="logout.html">로그아웃</a>
+        <a href="main.html">Main</a>
+        <a href="assignment.html">Assignment</a>
+        <a class="ghost-btn" href="logout.html">Logout</a>
       </nav>
     </header>
 
@@ -33,8 +32,8 @@
       <section class="panel panel-highlight">
         <div class="panel-header">
           <div>
-            <p class="section-kicker">배치내역</p>
-            <h2>현장별 배치 현황</h2>
+            <p class="section-kicker">History</p>
+            <h2>Assignment Status</h2>
           </div>
         </div>
 
@@ -44,12 +43,12 @@
           <table>
             <thead>
               <tr>
-                <th>업체명</th>
-                <th>현장명</th>
-                <th>작업일</th>
-                <th>배정 현황</th>
-                <th>상태</th>
-                <th>배정 인력</th>
+                <th>Client</th>
+                <th>Site</th>
+                <th>Work Date</th>
+                <th>Assigned</th>
+                <th>Status</th>
+                <th>Workers</th>
               </tr>
             </thead>
             <tbody id="historyTable"></tbody>
@@ -104,46 +103,33 @@
 
     function isPlaceholderName(value) {
       const text = String(value || "").trim();
-      return !text || /^[?？]+$/.test(text) || /^unknown$/i.test(text);
+      return !text || /^\?+$/.test(text) || /^unknown$/i.test(text);
     }
 
     function uniqueWorkers(workers) {
       const map = new Map();
-
       for (const worker of workers || []) {
         const key = identityKey(worker);
-        if (!key || map.has(key)) {
-          continue;
-        }
+        if (!key || map.has(key)) continue;
         map.set(key, worker);
       }
-
       return Array.from(map.values());
     }
 
-    function resolveAssignedWorker(profile, workerMap, workersByPhone) {
-      if (!profile) {
-        return null;
-      }
-
-      const linkedWorker = profile.worker_id ? workerMap.get(profile.worker_id) : null;
-      const phoneMatchedWorker = workersByPhone.get(normalizePhone(profile.phone));
-      const displayName = !isPlaceholderName(profile.name)
+    function resolveAssignedWorker(worker, profile) {
+      if (!worker && !profile) return null;
+      const displayName = !isPlaceholderName(profile?.name)
         ? profile.name
-        : linkedWorker?.name || phoneMatchedWorker?.name || profile.name || "이름 미확인";
-      const displayPhone = profile.phone || linkedWorker?.phone || phoneMatchedWorker?.phone || "";
-
-      return {
-        name: displayName,
-        phone: displayPhone
-      };
+        : worker?.name || profile?.name || "Unknown worker";
+      const displayPhone = normalizePhone(profile?.phone || worker?.phone || "");
+      return { name: displayName, phone: displayPhone };
     }
 
     function getStoredSession() {
       try {
         const raw = localStorage.getItem("workforce.session");
         return raw ? JSON.parse(raw) : null;
-      } catch (error) {
+      } catch {
         return null;
       }
     }
@@ -157,25 +143,18 @@
         token_type: auth.token_type,
         user: auth.user || stored.auth.user
       };
-      const nextStored = {
-        ...stored,
-        auth: authPayload
-      };
-
+      const nextStored = { ...stored, auth: authPayload };
       localStorage.setItem("workforce.session", JSON.stringify(nextStored));
       localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify({
         currentSession: authPayload,
         expiresAt: authPayload.expires_at
       }));
-
       return nextStored;
     }
 
     async function refreshStoredSession(stored) {
       const refreshToken = stored?.auth?.refresh_token;
-      if (!refreshToken) {
-        throw new Error("로그인 시간이 만료되었습니다. 다시 로그인해 주세요.");
-      }
+      if (!refreshToken) throw new Error("Login expired. Please sign in again.");
 
       const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
         method: "POST",
@@ -189,7 +168,7 @@
       const data = await response.json();
       if (!response.ok) {
         localStorage.removeItem("workforce.session");
-        throw new Error(data?.message || "로그인 시간이 만료되었습니다. 다시 로그인해 주세요.");
+        throw new Error(data?.message || "Login expired. Please sign in again.");
       }
 
       return saveStoredSession(stored, data);
@@ -198,14 +177,12 @@
     async function getValidStoredSession() {
       const stored = getStoredSession();
       if (!stored?.auth?.access_token || !stored?.profile) {
-        throw new Error("관리자 로그인 정보가 없습니다. 다시 로그인해 주세요.");
+        throw new Error("Admin session not found. Please sign in again.");
       }
-
       const expiresAt = Number(stored.auth.expires_at || 0);
       if (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 60) {
         return refreshStoredSession(stored);
       }
-
       return stored;
     }
 
@@ -231,7 +208,6 @@
         }
         throw new Error(message);
       }
-
       return data;
     }
 
@@ -245,54 +221,47 @@
     }
 
     function formatDate(value) {
-      if (!value) {
-        return "-";
-      }
-      return new Date(`${value}T00:00:00`).toLocaleDateString("ko-KR");
+      return value ? new Date(`${value}T00:00:00`).toLocaleDateString("ko-KR") : "-";
     }
 
     function buildStatus(headcount, assignedCount) {
-      if (headcount > 0 && assignedCount >= headcount) {
-        return "배치완료";
-      }
-      if (assignedCount > 0) {
-        return `${assignedCount}/${headcount}명 배치중`;
-      }
-      return "대기";
+      if (headcount > 0 && assignedCount >= headcount) return "Complete";
+      if (assignedCount > 0) return `${assignedCount}/${headcount} assigned`;
+      return "Waiting";
     }
 
     function statusClass(status) {
-      if (status === "배치완료") {
-        return "complete";
-      }
-      if (String(status || "").includes("배치중")) {
-        return "progress";
-      }
+      if (status === "Complete") return "complete";
+      if (String(status || "").includes("assigned")) return "progress";
       return "waiting";
     }
 
     function renderSession() {
       if (!state.profile) {
-        sessionBar.innerHTML = `<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>`;
+        sessionBar.innerHTML = '<span>No session.</span><a class="session-link" href="index.html">Login</a>';
         return;
       }
 
       sessionBar.innerHTML = `
-        <span><strong>${escapeHtml(state.profile.name)}</strong> · 관리자 · ${escapeHtml(state.profile.login_id || "")}</span>
+        <span><strong>${escapeHtml(state.profile.name)}</strong> · Admin · ${escapeHtml(state.profile.login_id || "")}</span>
         <span class="session-actions">
-          <a class="session-link" href="assignment.html">현장 배정</a>
+          <a class="session-link" href="assignment.html">Assignment</a>
         </span>
       `;
     }
 
     function buildRows() {
       const clientMap = new Map(state.clients.map((client) => [client.id, client]));
-      const profileMap = new Map(state.workerProfiles.map((profile) => [profile.id, profile]));
       const workerMap = new Map(state.workers.map((worker) => [worker.id, worker]));
-      const workersByPhone = new Map(
-        state.workers
-          .filter((worker) => normalizePhone(worker.phone))
-          .map((worker) => [normalizePhone(worker.phone), worker])
+      const profilesByWorkerId = new Map(
+        state.workerProfiles
+          .filter((profile) => profile.worker_id)
+          .map((profile) => [profile.worker_id, profile])
+      );
+      const profilesByPhone = new Map(
+        state.workerProfiles
+          .filter((profile) => normalizePhone(profile.phone))
+          .map((profile) => [normalizePhone(profile.phone), profile])
       );
 
       return state.requests
@@ -300,7 +269,13 @@
           const requestAssignments = state.assignments.filter((assignment) => assignment.request_id === request.id);
           const assignedWorkers = uniqueWorkers(
             requestAssignments
-              .map((assignment) => resolveAssignedWorker(profileMap.get(assignment.worker_id), workerMap, workersByPhone))
+              .map((assignment) => {
+                const worker = workerMap.get(assignment.worker_id) || null;
+                const profile = profilesByWorkerId.get(assignment.worker_id)
+                  || (worker ? profilesByPhone.get(normalizePhone(worker.phone)) : null)
+                  || null;
+                return resolveAssignedWorker(worker, profile);
+              })
               .filter(Boolean)
           );
           const assignedCount = requestAssignments.length;
@@ -323,7 +298,7 @@
     function renderHistory() {
       const rows = buildRows();
       if (rows.length === 0) {
-        historyTable.innerHTML = '<tr><td colspan="6" class="empty">저장된 배치내역이 없습니다.</td></tr>';
+        historyTable.innerHTML = '<tr><td colspan="6" class="empty">No assignments found.</td></tr>';
         return;
       }
 
@@ -333,7 +308,7 @@
             <td>${escapeHtml(row.clientName)}</td>
             <td>${escapeHtml(row.siteLocation)}</td>
             <td>${formatDate(row.workDate)}</td>
-            <td>${row.assignedCount}/${row.headcount}명</td>
+            <td>${row.assignedCount}/${row.headcount}</td>
             <td><span class="status-pill ${statusClass(row.status)}">${escapeHtml(row.status)}</span></td>
             <td>${row.workers.length > 0 ? row.workers.map((worker) => worker.phone ? `${escapeHtml(worker.name)} (${escapeHtml(worker.phone)})` : escapeHtml(worker.name)).join(", ") : "-"}</td>
           </tr>
@@ -345,19 +320,19 @@
       try {
         const stored = await getValidStoredSession();
         if (stored.profile.role !== "admin") {
-          redirectToLogin("관리자 계정으로 로그인해 주세요.");
+          redirectToLogin("Please sign in with an admin account.");
           return;
         }
 
         state.profile = stored.profile;
         renderSession();
-        setMessage("배치내역을 불러오는 중입니다...", false);
+        setMessage("Loading assignment history...", false);
 
         const [clients, requests, workers, workerProfiles, assignments] = await Promise.all([
           supabaseRest("clients?select=*&order=name.asc"),
           supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc"),
           supabaseRest("workers?select=id,name,phone&order=created_at.desc"),
-          supabaseRest("profiles?select=id,role,name,phone,worker_id,login_id&order=created_at.desc"),
+          supabaseRest("profiles?select=id,role,name,phone,worker_id,login_id&role=eq.worker&order=created_at.desc"),
           supabaseRest("assignments?select=*&order=created_at.desc")
         ]);
 
@@ -368,7 +343,7 @@
         state.assignments = assignments || [];
 
         renderHistory();
-        setMessage("배치내역 페이지가 준비되었습니다.", false);
+        setMessage("Assignment history is ready.", false);
       } catch (error) {
         redirectToLogin(error.message);
       }
