@@ -14,10 +14,7 @@
 </head>
 <body data-page="main" data-role="admin">
   <div class="app-shell">
-    <div class="session-bar" id="sessionBar">
-      <span>관리자 메인입니다.</span>
-      <a class="ghost-btn session-button" href="logout.html">로그아웃</a>
-    </div>
+    <div class="session-bar" id="sessionBar"></div>
 
     <header class="hero main-hero">
       <div>
@@ -29,7 +26,7 @@
       </div>
       <div class="hero-stats">
         <article class="stat-card">
-          <strong>5</strong>
+          <strong id="totalPageCount">5</strong>
           <span>주요 페이지</span>
         </article>
         <article class="stat-card">
@@ -67,9 +64,75 @@
             <h2>정산</h2>
             <p>근무시간과 공수 데이터를 기준으로 현장 정산 내용을 확인합니다.</p>
           </a>
+          <a class="menu-card" id="adminApprovalsMenuCard" href="admin-approvals.html" hidden>
+            <p class="section-kicker">PAGE 6</p>
+            <h2>관리자 승인</h2>
+            <p>관리자 가입 신청 목록을 확인하고 승인 상태를 처리합니다.</p>
+          </a>
         </div>
       </section>
     </main>
   </div>
+  <script src="access-control.js"></script>
+  <script>
+    const sessionBar = document.getElementById("sessionBar");
+    const totalPageCount = document.getElementById("totalPageCount");
+    const adminApprovalsMenuCard = document.getElementById("adminApprovalsMenuCard");
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function getStoredSession() {
+      try {
+        const raw = localStorage.getItem("workforce.session");
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function redirectToLogin(message) {
+      const params = new URLSearchParams({
+        redirect: "main.html",
+        role: "admin",
+        message
+      });
+      window.location.href = `index.html?${params.toString()}`;
+    }
+
+    function renderSession(profile) {
+      const approvalLinks = window.accessControl?.canApproveAdminSignups(profile)
+        ? '<a class="session-link" href="admin-approvals.html">관리자 승인</a>'
+        : "";
+      sessionBar.innerHTML = `
+        <span><strong>${escapeHtml(profile.name)}</strong> · 관리자 · ${escapeHtml(profile.login_id || "")}</span>
+        <span class="session-actions">
+          ${approvalLinks}
+          <a class="session-link" href="assignment.html">현장 배정</a>
+          <a class="session-link" href="logout.html">로그아웃</a>
+        </span>
+      `;
+    }
+
+    (function bootstrap() {
+      const stored = getStoredSession();
+      const profile = stored?.profile || null;
+      if (!window.accessControl?.canUseAdminService(profile)) {
+        redirectToLogin(window.accessControl?.getAdminAccessDeniedMessage(profile) || "관리자 계정으로 로그인해 주세요.");
+        return;
+      }
+      renderSession(profile);
+      if (window.accessControl?.canApproveAdminSignups(profile)) {
+        adminApprovalsMenuCard.hidden = false;
+        totalPageCount.textContent = "6";
+      }
+    })();
+  </script>
 </body>
 </html>

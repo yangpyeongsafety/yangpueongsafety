@@ -63,6 +63,7 @@
   </div>
 
   <script src="supabase-config.js"></script>
+  <script src="access-control.js"></script>
   <script>
     const loginForm = document.getElementById("loginForm");
     const loginRoleSelect = document.getElementById("loginRole");
@@ -74,19 +75,20 @@
     }
 
     function loginEmail(loginId) {
-      const safeId = String(loginId)
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9._-]/g, "_");
-      return `${safeId}@yangpyeongsafety.app`;
+      return window.accessControl?.toAuthEmail(loginId);
     }
 
     function normalizeRole(value) {
-      return value === "admin" ? "admin" : "worker";
+      return window.accessControl?.normalizeRole(value) || (value === "admin" ? "admin" : "worker");
     }
 
     function isWorkerRole(role) {
-      return role === "worker" || role === "user";
+      return window.accessControl?.isWorkerRole(role) || role === "worker" || role === "user";
+    }
+
+    function clearStoredSession() {
+      localStorage.removeItem("workforce.session");
+      localStorage.removeItem("sb-riyxhsesprzvnvconhos-auth-token");
     }
 
     function applyRequestedRole() {
@@ -150,6 +152,7 @@
         const profile = profiles[0];
 
         if (!profile) {
+          clearStoredSession();
           setLoginMessage("로그인은 되었지만 사용자 프로필을 찾지 못했습니다. Supabase profiles 테이블을 확인해 주세요.");
           return false;
         }
@@ -159,7 +162,14 @@
           : isWorkerRole(profile.role);
 
         if (!roleMatched) {
+          clearStoredSession();
           setLoginMessage("선택한 권한과 가입된 권한이 다릅니다.");
+          return false;
+        }
+
+        if (role === "admin" && !window.accessControl?.canUseAdminService(profile)) {
+          clearStoredSession();
+          setLoginMessage(window.accessControl?.getAdminApprovalMessage() || "관리자 승인 후 이용할 수 있습니다.");
           return false;
         }
 
@@ -179,7 +189,9 @@
         localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify(authPayload));
 
         setLoginMessage("로그인 성공. 페이지를 이동합니다.", false);
-        window.location.href = role === "admin" ? "main.html" : "worker-entry.html";
+        const redirect = new URLSearchParams(window.location.search).get("redirect");
+        const nextPage = window.accessControl?.getDefaultPageForProfile(profile) || (role === "admin" ? "main.html" : "worker-entry.html");
+        window.location.href = redirect || nextPage;
       } catch (error) {
         setLoginMessage(`로그인 요청 실패: ${error.message}`);
       }
@@ -188,7 +200,12 @@
     };
 
     applyRequestedRole();
-    setLoginMessage("로그인 준비 완료. 아이디와 비밀번호를 입력해 주세요.", false);
+    const queryMessage = new URLSearchParams(window.location.search).get("message");
+    if (queryMessage) {
+      setLoginMessage(queryMessage);
+    } else {
+      setLoginMessage("로그인 준비 완료. 아이디와 비밀번호를 입력해 주세요.", false);
+    }
   </script>
 </body>
 </html>

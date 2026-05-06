@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>관리자 승인</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=SUIT:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="admin-approvals" data-role="admin">
+  <div class="app-shell">
+    <div class="session-bar" id="sessionBar"></div>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">ADMIN APPROVALS</p>
+        <h1>관리자 가입 신청을 승인하세요</h1>
+        <p class="hero-copy"><strong>fulmin2025</strong>, <strong>envu86</strong> 계정만 이 페이지에서 관리자 승인 요청을 처리할 수 있습니다.</p>
+      </div>
+      <nav class="top-nav">
+        <a href="main.html">메인</a>
+        <a href="assignment.html">현장 배정</a>
+        <a href="worker-management.html">인력관리</a>
+        <a class="ghost-btn" href="logout.html">로그아웃</a>
+      </nav>
+    </header>
+
+    <main class="dashboard">
+      <section class="panel panel-highlight">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">APPROVAL SUMMARY</p>
+            <h2>승인 현황</h2>
+          </div>
+        </div>
+        <div class="summary-grid">
+          <article class="summary-card">
+            <h3>승인 대기</h3>
+            <p>아직 관리자 서비스에 접근할 수 없는 계정입니다.</p>
+            <div class="summary-items">
+              <div class="summary-item">
+                <strong id="pendingAdminCount">0명</strong>
+                <span>승인 필요</span>
+              </div>
+            </div>
+          </article>
+          <article class="summary-card">
+            <h3>승인 완료</h3>
+            <p>관리자 서비스 접근이 가능한 계정입니다.</p>
+            <div class="summary-items">
+              <div class="summary-item">
+                <strong id="approvedAdminCount">0명</strong>
+                <span>승인 완료</span>
+              </div>
+            </div>
+          </article>
+          <article class="summary-card">
+            <h3>승인 관리자</h3>
+            <p>다른 관리자를 승인할 수 있는 계정입니다.</p>
+            <div class="summary-items">
+              <div class="summary-item">
+                <strong id="approverAdminCount">0명</strong>
+                <span>승인 권한 보유</span>
+              </div>
+            </div>
+          </article>
+        </div>
+        <p id="authMessage" class="auth-message"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">PENDING</p>
+            <h2>승인 대기 관리자</h2>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>이름</th>
+                <th>전화번호</th>
+                <th>아이디</th>
+                <th>신청일시</th>
+                <th>상태</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody id="pendingAdminTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">APPROVED</p>
+            <h2>승인 완료 관리자</h2>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>이름</th>
+                <th>전화번호</th>
+                <th>아이디</th>
+                <th>구분</th>
+                <th>승인일시</th>
+                <th>승인자</th>
+              </tr>
+            </thead>
+            <tbody id="approvedAdminTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="supabase-config.js"></script>
+  <script src="access-control.js"></script>
+  <script>
+    const sessionBar = document.getElementById("sessionBar");
+    const authMessage = document.getElementById("authMessage");
+    const pendingAdminTable = document.getElementById("pendingAdminTable");
+    const approvedAdminTable = document.getElementById("approvedAdminTable");
+    const pendingAdminCount = document.getElementById("pendingAdminCount");
+    const approvedAdminCount = document.getElementById("approvedAdminCount");
+    const approverAdminCount = document.getElementById("approverAdminCount");
+
+    const state = {
+      profile: null,
+      admins: []
+    };
+
+    function setMessage(message, isError = true) {
+      authMessage.textContent = message;
+      authMessage.className = isError ? "auth-message error" : "auth-message success";
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function formatDateTime(value) {
+      if (!value) {
+        return "-";
+      }
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return "-";
+      }
+      return new Intl.DateTimeFormat("ko-KR", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(date);
+    }
+
+    function getStoredSession() {
+      try {
+        const raw = localStorage.getItem("workforce.session");
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveStoredSession(stored, auth) {
+      const authPayload = {
+        access_token: auth.access_token,
+        refresh_token: auth.refresh_token || stored.auth.refresh_token,
+        expires_in: auth.expires_in,
+        expires_at: Math.floor(Date.now() / 1000) + Number(auth.expires_in || 0),
+        token_type: auth.token_type,
+        user: auth.user || stored.auth.user
+      };
+      const nextStored = { ...stored, auth: authPayload };
+      localStorage.setItem("workforce.session", JSON.stringify(nextStored));
+      localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify({
+        currentSession: authPayload,
+        expiresAt: authPayload.expires_at
+      }));
+      return nextStored;
+    }
+
+    async function refreshStoredSession(stored) {
+      const refreshToken = stored?.auth?.refresh_token;
+      if (!refreshToken) {
+        throw new Error("관리자 로그인 정보가 만료되었습니다. 다시 로그인해 주세요.");
+      }
+
+      const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        localStorage.removeItem("workforce.session");
+        throw new Error(data?.message || "관리자 로그인 정보가 만료되었습니다. 다시 로그인해 주세요.");
+      }
+
+      return saveStoredSession(stored, data);
+    }
+
+    async function getValidStoredSession() {
+      const stored = getStoredSession();
+      if (!stored?.auth?.access_token || !stored?.profile) {
+        throw new Error("관리자 로그인 정보가 없습니다. 다시 로그인해 주세요.");
+      }
+      const expiresAt = Number(stored.auth.expires_at || 0);
+      if (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 60) {
+        return refreshStoredSession(stored);
+      }
+      return stored;
+    }
+
+    async function supabaseRest(path, options = {}, retry = true) {
+      const stored = await getValidStoredSession();
+      const response = await fetch(`${window.SUPABASE_URL}/rest/v1/${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${stored.auth.access_token}`,
+          ...(options.headers || {})
+        }
+      });
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+      if (!response.ok) {
+        const message = data?.message || data?.msg || response.statusText;
+        if (retry && /jwt expired/i.test(message)) {
+          await refreshStoredSession(stored);
+          return supabaseRest(path, options, false);
+        }
+        throw new Error(message);
+      }
+      return data;
+    }
+
+    function redirectToLogin(message) {
+      const params = new URLSearchParams({
+        redirect: "admin-approvals.html",
+        role: "admin",
+        message
+      });
+      window.location.href = `index.html?${params.toString()}`;
+    }
+
+    function renderSession() {
+      if (!state.profile) {
+        sessionBar.innerHTML = '<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>';
+        return;
+      }
+
+      sessionBar.innerHTML = `
+        <span><strong>${escapeHtml(state.profile.name)}</strong> · 승인 관리자 · ${escapeHtml(state.profile.login_id || "")}</span>
+        <span class="session-actions">
+          <a class="session-link" href="main.html">메인</a>
+          <a class="session-link" href="assignment.html">현장 배정</a>
+          <a class="session-link" href="worker-management.html">인력관리</a>
+        </span>
+      `;
+    }
+
+    function getApproverLabel(admin) {
+      if (window.accessControl?.canApproveAdminSignups(admin)) {
+        return "승인 관리자";
+      }
+      return "일반 관리자";
+    }
+
+    function getApproverNameMap() {
+      return new Map(state.admins.map((admin) => [admin.id, admin]));
+    }
+
+    function renderSummary() {
+      const pendingAdmins = state.admins.filter((admin) => window.accessControl?.isPendingAdmin(admin));
+      const approvedAdmins = state.admins.filter((admin) => window.accessControl?.canUseAdminService(admin));
+      const approvers = approvedAdmins.filter((admin) => window.accessControl?.canApproveAdminSignups(admin));
+
+      pendingAdminCount.textContent = `${pendingAdmins.length}명`;
+      approvedAdminCount.textContent = `${approvedAdmins.length}명`;
+      approverAdminCount.textContent = `${approvers.length}명`;
+    }
+
+    function renderPendingAdmins() {
+      const pendingAdmins = state.admins
+        .filter((admin) => window.accessControl?.isPendingAdmin(admin))
+        .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+
+      if (pendingAdmins.length === 0) {
+        pendingAdminTable.innerHTML = '<tr><td colspan="6" class="empty">현재 승인 대기 중인 관리자 신청이 없습니다.</td></tr>';
+        return;
+      }
+
+      pendingAdminTable.innerHTML = pendingAdmins.map((admin) => `
+        <tr>
+          <td>${escapeHtml(admin.name || "-")}</td>
+          <td>${escapeHtml(admin.phone || "-")}</td>
+          <td>${escapeHtml(admin.login_id || "-")}</td>
+          <td>${formatDateTime(admin.created_at)}</td>
+          <td><span class="status-pill pending">승인 대기</span></td>
+          <td><button type="button" class="primary-btn" data-approve-id="${admin.id}">승인</button></td>
+        </tr>
+      `).join("");
+    }
+
+    function renderApprovedAdmins() {
+      const approverMap = getApproverNameMap();
+      const approvedAdmins = state.admins
+        .filter((admin) => window.accessControl?.canUseAdminService(admin))
+        .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+
+      if (approvedAdmins.length === 0) {
+        approvedAdminTable.innerHTML = '<tr><td colspan="6" class="empty">승인된 관리자 계정이 없습니다.</td></tr>';
+        return;
+      }
+
+      approvedAdminTable.innerHTML = approvedAdmins.map((admin) => {
+        const approvedBy = approverMap.get(admin.admin_approved_by);
+        const approvedByLabel = window.accessControl?.canApproveAdminSignups(admin)
+          ? "자체 승인 계정"
+          : approvedBy?.name || approvedBy?.login_id || "-";
+        return `
+          <tr>
+            <td>${escapeHtml(admin.name || "-")}</td>
+            <td>${escapeHtml(admin.phone || "-")}</td>
+            <td>${escapeHtml(admin.login_id || "-")}</td>
+            <td><span class="status-pill complete">${getApproverLabel(admin)}</span></td>
+            <td>${formatDateTime(admin.admin_approved_at)}</td>
+            <td>${escapeHtml(approvedByLabel)}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    async function loadPageData() {
+      const admins = await supabaseRest("profiles?select=id,login_id,role,name,phone,created_at,admin_approved,admin_approved_at,admin_approved_by,can_manage_admin_approvals&role=eq.admin&order=created_at.asc");
+      state.admins = admins || [];
+      renderSummary();
+      renderPendingAdmins();
+      renderApprovedAdmins();
+    }
+
+    async function handleApproveClick(event) {
+      const button = event.target.closest("[data-approve-id]");
+      if (!button) {
+        return;
+      }
+
+      const adminId = button.dataset.approveId;
+      const admin = state.admins.find((item) => item.id === adminId);
+      if (!admin) {
+        return;
+      }
+
+      const confirmed = window.confirm(`${admin.name || admin.login_id || "관리자"} 계정을 승인할까요?`);
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        setMessage("관리자 승인을 처리하는 중입니다...", false);
+        await supabaseRest(`profiles?id=eq.${adminId}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            admin_approved: true,
+            admin_approved_at: new Date().toISOString(),
+            admin_approved_by: state.profile.id
+          })
+        });
+        await loadPageData();
+        setMessage("관리자 승인이 완료되었습니다.", false);
+      } catch (error) {
+        setMessage(`관리자 승인 실패: ${error.message}`);
+      }
+    }
+
+    async function bootstrap() {
+      try {
+        const stored = await getValidStoredSession();
+        if (window.accessControl?.canUseAdminService(stored.profile) && !window.accessControl?.canApproveAdminSignups(stored.profile)) {
+          window.location.href = "main.html";
+          return;
+        }
+        if (!window.accessControl?.canApproveAdminSignups(stored.profile)) {
+          redirectToLogin(window.accessControl?.getAdminAccessDeniedMessage(stored.profile) || "승인 관리자 계정으로 로그인해 주세요.");
+          return;
+        }
+
+        state.profile = stored.profile;
+        renderSession();
+        setMessage("관리자 승인 목록을 불러오는 중입니다...", false);
+        await loadPageData();
+        setMessage("관리자 승인 페이지가 준비되었습니다.", false);
+      } catch (error) {
+        redirectToLogin(error.message);
+      }
+    }
+
+    pendingAdminTable.addEventListener("click", handleApproveClick);
+    bootstrap();
+  </script>
+</body>
+</html>

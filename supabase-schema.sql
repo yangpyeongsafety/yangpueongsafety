@@ -24,6 +24,10 @@ create table if not exists public.profiles (
   current_address text,
   emergency_contact text,
   hire_date date,
+  admin_approved boolean not null default true,
+  admin_approved_at timestamptz,
+  admin_approved_by uuid references public.profiles(id) on delete set null,
+  can_manage_admin_approvals boolean not null default false,
   worker_id uuid references public.workers(id) on delete set null,
   created_at timestamptz not null default now()
 );
@@ -40,6 +44,10 @@ alter table public.profiles
   add column if not exists current_address text,
   add column if not exists emergency_contact text,
   add column if not exists hire_date date,
+  add column if not exists admin_approved boolean not null default true,
+  add column if not exists admin_approved_at timestamptz,
+  add column if not exists admin_approved_by uuid references public.profiles(id) on delete set null,
+  add column if not exists can_manage_admin_approvals boolean not null default false,
   add column if not exists worker_id uuid references public.workers(id) on delete set null,
   add column if not exists created_at timestamptz not null default now();
 
@@ -214,6 +222,19 @@ where resident_number is distinct from public.normalize_resident_number(resident
    or account_number is distinct from public.normalize_phone(account_number)
    or emergency_contact is distinct from public.normalize_phone(emergency_contact);
 
+update public.profiles
+set admin_approved = true
+where admin_approved is null;
+
+update public.profiles
+set role = 'admin',
+    admin_approved = true,
+    admin_approved_at = coalesce(admin_approved_at, created_at, now()),
+    admin_approved_by = coalesce(admin_approved_by, id),
+    can_manage_admin_approvals = true,
+    worker_id = null
+where lower(coalesce(login_id, '')) in ('fulmin2025', 'envu86');
+
 with matched_workers as (
   select
     p.id as profile_id,
@@ -260,9 +281,20 @@ declare
   meta_emergency_contact text;
   meta_hire_date date;
   meta_login_id text;
+  meta_admin_approved boolean;
+  meta_can_manage_admin_approvals boolean;
   matched_worker_id uuid;
 begin
+  meta_login_id := nullif(btrim(coalesce(new.raw_user_meta_data->>'login_id', split_part(new.email, '@', 1))), '');
+  meta_login_id := coalesce(meta_login_id, split_part(new.email, '@', 1));
+  meta_can_manage_admin_approvals := lower(meta_login_id) in ('fulmin2025', 'envu86');
   meta_role := coalesce(new.raw_user_meta_data->>'role', 'worker');
+  if meta_role <> 'admin' then
+    meta_role := 'worker';
+  end if;
+  if meta_can_manage_admin_approvals then
+    meta_role := 'admin';
+  end if;
   meta_name := coalesce(new.raw_user_meta_data->>'name', '');
   meta_resident_number := public.normalize_resident_number(new.raw_user_meta_data->>'resident_number');
   meta_phone := public.normalize_phone(new.raw_user_meta_data->>'phone');
@@ -272,7 +304,10 @@ begin
   meta_current_address := coalesce(new.raw_user_meta_data->>'current_address', '');
   meta_emergency_contact := public.normalize_phone(new.raw_user_meta_data->>'emergency_contact');
   meta_hire_date := nullif(new.raw_user_meta_data->>'hire_date', '')::date;
-  meta_login_id := coalesce(new.raw_user_meta_data->>'login_id', split_part(new.email, '@', 1));
+  meta_admin_approved := case
+    when meta_role = 'admin' then meta_can_manage_admin_approvals
+    else true
+  end;
 
   if meta_role = 'worker' then
     if meta_phone is not null then
@@ -314,6 +349,10 @@ begin
     current_address,
     emergency_contact,
     hire_date,
+    admin_approved,
+    admin_approved_at,
+    admin_approved_by,
+    can_manage_admin_approvals,
     worker_id
   )
   values (
@@ -329,6 +368,10 @@ begin
     meta_current_address,
     meta_emergency_contact,
     meta_hire_date,
+    meta_admin_approved,
+    case when meta_role = 'admin' and meta_admin_approved then now() else null end,
+    case when meta_role = 'admin' and meta_admin_approved then new.id else null end,
+    meta_can_manage_admin_approvals,
     matched_worker_id
   );
 
@@ -341,6 +384,23 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
 
+create or replace function public.is_admin_approver()
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and role = 'admin'
+      and admin_approved = true
+      and can_manage_admin_approvals = true
+  );
+$$;
+
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -351,7 +411,9 @@ as $$
   select exists (
     select 1
     from public.profiles
-    where id = auth.uid() and role = 'admin'
+    where id = auth.uid()
+      and role = 'admin'
+      and admin_approved = true
   );
 $$;
 
@@ -366,6 +428,54 @@ as $$
   from public.profiles
   where id = auth.uid()
   limit 1;
+$$;
+
+create or replace function public.handle_profile_admin_guard()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if lower(coalesce(new.login_id, '')) is distinct from lower(coalesce(old.login_id, ''))
+    or new.role is distinct from old.role
+    or coalesce(new.admin_approved, false) is distinct from coalesce(old.admin_approved, false)
+    or new.admin_approved_at is distinct from old.admin_approved_at
+    or new.admin_approved_by is distinct from old.admin_approved_by
+    or coalesce(new.can_manage_admin_approvals, false) is distinct from coalesce(old.can_manage_admin_approvals, false) then
+    if auth.uid() is not null and not public.is_admin_approver() then
+      raise exception '관리자 승인 권한이 없습니다.';
+    end if;
+  end if;
+
+  if new.role = 'admin' then
+    new.worker_id := null;
+  else
+    new.admin_approved := true;
+    new.admin_approved_at := null;
+    new.admin_approved_by := null;
+    new.can_manage_admin_approvals := false;
+  end if;
+
+  if new.role = 'admin' and coalesce(new.admin_approved, false) then
+    new.admin_approved_at := coalesce(new.admin_approved_at, now());
+    new.admin_approved_by := coalesce(new.admin_approved_by, auth.uid(), new.id);
+  elsif new.role = 'admin' then
+    new.admin_approved_at := null;
+    new.admin_approved_by := null;
+    new.can_manage_admin_approvals := false;
+  end if;
+
+  if lower(coalesce(new.login_id, '')) in ('fulmin2025', 'envu86') then
+    new.role := 'admin';
+    new.admin_approved := true;
+    new.admin_approved_at := coalesce(new.admin_approved_at, now());
+    new.admin_approved_by := coalesce(new.admin_approved_by, auth.uid(), new.id);
+    new.can_manage_admin_approvals := true;
+    new.worker_id := null;
+  end if;
+
+  return new;
+end;
 $$;
 
 alter table public.workers enable row level security;
@@ -393,6 +503,11 @@ create policy "profiles admin delete"
 on public.profiles for delete
 to authenticated
 using (public.is_admin());
+
+drop trigger if exists profiles_guard_admin_fields on public.profiles;
+create trigger profiles_guard_admin_fields
+before update on public.profiles
+for each row execute procedure public.handle_profile_admin_guard();
 
 drop policy if exists "workers admin manage" on public.workers;
 create policy "workers admin manage"

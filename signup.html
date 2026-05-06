@@ -149,12 +149,26 @@
   </div>
 
   <script src="supabase-config.js"></script>
+  <script src="access-control.js"></script>
   <script>
     const signupForm = document.getElementById("signupForm");
     const signupRoleSelect = document.getElementById("signupRole");
     const authMessage = document.getElementById("authMessage");
+    const authNameField = document.getElementById("authNameField");
     const residentNumberInput = signupForm?.querySelector("input[name='residentNumber']");
     const digitOnlyInputs = signupForm?.querySelectorAll("[data-digits-only='true']") || [];
+    const workerOnlyFieldNames = [
+      "residentNumber",
+      "bankName",
+      "accountNumber",
+      "bloodType",
+      "currentAddress",
+      "emergencyContact",
+      "hireDate"
+    ];
+    const workerOnlyFields = workerOnlyFieldNames
+      .map((fieldName) => signupForm?.querySelector(`[name='${fieldName}']`))
+      .filter(Boolean);
 
     function setSignupMessage(message, isError = true) {
       authMessage.textContent = message;
@@ -162,15 +176,11 @@
     }
 
     function signupEmail(loginId) {
-      const safeId = String(loginId)
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9._-]/g, "_");
-      return `${safeId}@yangpyeongsafety.app`;
+      return window.accessControl?.toAuthEmail(loginId);
     }
 
     function normalizeDigits(value) {
-      return String(value || "").replace(/\D+/g, "");
+      return window.accessControl?.normalizePhone(value) || String(value || "").replace(/\D+/g, "");
     }
 
     function normalizeResidentNumber(value) {
@@ -186,7 +196,7 @@
     }
 
     function normalizeRole(value) {
-      return value === "admin" ? "admin" : "worker";
+      return window.accessControl?.normalizeRole(value) || (value === "admin" ? "admin" : "worker");
     }
 
     function readTrimmed(formData, key) {
@@ -210,6 +220,28 @@
       if (signupRoleSelect) {
         signupRoleSelect.value = requestedRole;
       }
+      syncSignupRoleFields();
+    }
+
+    function syncSignupRoleFields() {
+      const isAdminSignup = normalizeRole(signupRoleSelect?.value) === "admin";
+      workerOnlyFields.forEach((field) => {
+        const label = field.closest("label");
+        field.dataset.originalRequired = field.dataset.originalRequired || String(field.required);
+        if (label) {
+          label.hidden = isAdminSignup;
+        }
+        field.disabled = isAdminSignup;
+        field.required = !isAdminSignup && field.dataset.originalRequired === "true";
+        if (isAdminSignup) {
+          field.value = "";
+        }
+      });
+      if (authNameField) {
+        authNameField.textContent = isAdminSignup
+          ? "관리자 계정은 이름과 전화번호만 입력한 뒤 승인 대기 상태로 가입됩니다."
+          : "작업자는 배정 시 사용하는 이름과 같게 입력해 주세요.";
+      }
     }
 
     window.directSignup = async function directSignup(event) {
@@ -228,41 +260,53 @@
       syncDigitOnlyInputs();
       syncResidentNumberInput();
       const formData = new FormData(signupForm);
+      const role = normalizeRole(formData.get("role"));
+      const isAdminSignup = role === "admin";
 
       const payload = {
         login_id: readTrimmed(formData, "signupId"),
-        role: normalizeRole(formData.get("role")),
+        role,
         name: readTrimmed(formData, "name"),
-        resident_number: normalizeResidentNumber(formData.get("residentNumber")),
-        phone: normalizeDigits(formData.get("phone")),
-        bank_name: readTrimmed(formData, "bankName"),
-        account_number: normalizeDigits(formData.get("accountNumber")),
-        blood_type: readTrimmed(formData, "bloodType"),
-        current_address: readTrimmed(formData, "currentAddress"),
-        emergency_contact: normalizeDigits(formData.get("emergencyContact")),
-        hire_date: readTrimmed(formData, "hireDate") || null
+        phone: normalizeDigits(formData.get("phone"))
       };
+      if (!isAdminSignup) {
+        Object.assign(payload, {
+          resident_number: normalizeResidentNumber(formData.get("residentNumber")),
+          bank_name: readTrimmed(formData, "bankName"),
+          account_number: normalizeDigits(formData.get("accountNumber")),
+          blood_type: readTrimmed(formData, "bloodType"),
+          current_address: readTrimmed(formData, "currentAddress"),
+          emergency_contact: normalizeDigits(formData.get("emergencyContact")),
+          hire_date: readTrimmed(formData, "hireDate") || null
+        });
+      }
       const password = readTrimmed(formData, "signupPassword");
 
-      const requiredKeys = [
-        "login_id",
-        "role",
-        "name",
-        "resident_number",
-        "phone",
-        "bank_name",
-        "account_number",
-        "blood_type",
-        "current_address",
-        "emergency_contact"
-      ];
+      const requiredKeys = isAdminSignup
+        ? ["login_id", "role", "name", "phone"]
+        : [
+            "login_id",
+            "role",
+            "name",
+            "resident_number",
+            "phone",
+            "bank_name",
+            "account_number",
+            "blood_type",
+            "current_address",
+            "emergency_contact"
+          ];
 
       if (!password || requiredKeys.some((key) => !payload[key])) {
-        setSignupMessage("입사일을 제외한 모든 항목을 입력해 주세요.");
+        setSignupMessage(
+          isAdminSignup
+            ? "이름, 전화번호, 아이디, 비밀번호를 모두 입력해 주세요."
+            : "입사일을 제외한 모든 항목을 입력해 주세요."
+        );
         return false;
       }
 
-      if (!isValidResidentNumber(payload.resident_number)) {
+      if (!isAdminSignup && !isValidResidentNumber(payload.resident_number)) {
         setSignupMessage("주민번호는 000000-0000000 형식으로 -를 포함해 입력해 주세요.");
         return false;
       }
@@ -291,7 +335,14 @@
 
         signupForm.reset();
         applyRequestedRole();
-        setSignupMessage("회원가입이 완료되었습니다. 로그인 페이지에서 로그인해 주세요.", false);
+        setSignupMessage(
+          isAdminSignup
+            ? window.accessControl?.isApproverLoginId(payload.login_id)
+              ? "승인 가능한 관리자 계정이 생성되었습니다. 로그인해 주세요."
+              : "관리자 가입 신청이 접수되었습니다. fulmin2025 또는 envu86 계정의 승인 후 로그인할 수 있습니다."
+            : "회원가입이 완료되었습니다. 로그인 페이지에서 로그인해 주세요.",
+          false
+        );
       } catch (error) {
         setSignupMessage(`회원가입 요청 실패: ${error.message}`);
       }
@@ -309,6 +360,7 @@
       residentNumberInput.value = normalizeResidentNumber(residentNumberInput.value);
     });
 
+    signupRoleSelect?.addEventListener("change", syncSignupRoleFields);
     applyRequestedRole();
     setSignupMessage("회원가입 준비 완료. 정보를 입력하고 버튼을 눌러 주세요.", false);
   </script>

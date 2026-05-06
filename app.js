@@ -2,6 +2,7 @@ const pageRole = document.body.dataset.role || "public";
 const currentPage = document.body.dataset.page || "main";
 
 const supabase = window.supabase?.createClient?.(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+const accessControl = window.accessControl || null;
 
 const state = {
   session: null,
@@ -45,6 +46,31 @@ const els = {
   exportCsvBtn: byId("exportCsvBtn"),
   heroStats: byId("heroStats")
 };
+
+function canUseAdminService(profile) {
+  return accessControl?.canUseAdminService ? accessControl.canUseAdminService(profile) : profile?.role === "admin";
+}
+
+function canApproveAdminSignups(profile) {
+  return accessControl?.canApproveAdminSignups ? accessControl.canApproveAdminSignups(profile) : false;
+}
+
+function isWorkerRole(role) {
+  return accessControl?.isWorkerRole ? accessControl.isWorkerRole(role) : role === "worker" || role === "user";
+}
+
+function getAdminAccessDeniedMessage(profile) {
+  return accessControl?.getAdminAccessDeniedMessage
+    ? accessControl.getAdminAccessDeniedMessage(profile)
+    : "관리자 계정으로 로그인해야 합니다.";
+}
+
+function getDefaultPageForProfile(profile, role) {
+  if (accessControl?.getDefaultPageForProfile) {
+    return accessControl.getDefaultPageForProfile(profile);
+  }
+  return role === "admin" ? "main.html" : "worker-entry.html";
+}
 
 window.forceLogout = function forceLogout() {
   try {
@@ -142,11 +168,11 @@ async function enforceAccess() {
     redirectToLogin("로그인이 필요합니다.");
     return false;
   }
-  if (pageRole === "admin" && state.profile?.role !== "admin") {
-    redirectToLogin("관리자 계정으로 로그인해야 합니다.");
+  if (pageRole === "admin" && !canUseAdminService(state.profile)) {
+    redirectToLogin(getAdminAccessDeniedMessage(state.profile));
     return false;
   }
-  if (pageRole === "user" && state.profile?.role !== "worker") {
+  if (pageRole === "user" && !isWorkerRole(state.profile?.role)) {
     redirectToLogin("사용자 계정으로 로그인해야 합니다.");
     return false;
   }
@@ -264,14 +290,22 @@ async function handleLoginSubmit(event) {
   }
 
   await hydrateSession();
-  if (state.profile?.role !== role) {
+  const roleMatched = role === "admin" ? state.profile?.role === "admin" : isWorkerRole(state.profile?.role);
+  if (!roleMatched) {
     await supabase.auth.signOut();
+    clearAuthStorage();
     setAuthMessage("선택한 권한과 가입된 권한이 다릅니다.");
+    return;
+  }
+  if (role === "admin" && !canUseAdminService(state.profile)) {
+    await supabase.auth.signOut();
+    clearAuthStorage();
+    setAuthMessage(accessControl?.getAdminApprovalMessage() || "관리자 승인 후 이용할 수 있습니다.");
     return;
   }
 
   const redirect = new URLSearchParams(window.location.search).get("redirect");
-  window.location.href = redirect || defaultPageForRole(role);
+  window.location.href = redirect || getDefaultPageForProfile(state.profile, role);
 }
 
 async function handleSignupSubmit(event) {
@@ -492,7 +526,11 @@ function renderSessionBar() {
     els.sessionBar.innerHTML = `<span>로그인 전입니다.</span><a class="session-link" href="index.html">로그인</a>`;
     return;
   }
-  const roleLabel = state.profile.role === "admin" ? "관리자" : "사용자";
+  const roleLabel = canApproveAdminSignups(state.profile)
+    ? "승인 관리자"
+    : state.profile.role === "admin"
+      ? "관리자"
+      : "사용자";
   els.sessionBar.innerHTML = `
     <span><strong>${escapeHtml(state.profile.name)}</strong> 님 · ${roleLabel} · ${escapeHtml(state.profile.login_id)}</span>
     <button type="button" class="ghost-btn session-button" data-action="logout" onclick="window.forceLogout && window.forceLogout()">로그아웃</button>
@@ -858,7 +896,7 @@ function syncAuthFields() {
     els.authNameField.textContent =
       forcedRole === "worker"
         ? "사용자 이름/전화번호는 배정된 인력 정보와 같게 맞추는 것이 좋습니다."
-        : "관리자 이름과 연락처를 입력하세요.";
+        : "관리자 이름과 전화번호를 입력하면 승인 대기 상태로 가입됩니다.";
   }
   const message = query.get("message");
   if (message && els.authMessage && !els.authMessage.textContent) {
@@ -877,6 +915,9 @@ function setAuthMessage(message, isError = true) {
 }
 
 function toAuthEmail(loginId) {
+  if (accessControl?.toAuthEmail) {
+    return accessControl.toAuthEmail(loginId);
+  }
   const safeId = String(loginId)
     .trim()
     .toLowerCase()
@@ -904,11 +945,11 @@ function translateSupabaseError(message) {
 }
 
 function normalizeRole(value) {
-  return value === "worker" || value === "user" ? "worker" : "admin";
+  return accessControl?.normalizeRole ? accessControl.normalizeRole(value) : value === "worker" || value === "user" ? "worker" : "admin";
 }
 
 function defaultPageForRole(role) {
-  return role === "admin" ? "main.html" : "worker-entry.html";
+  return role === "admin" ? getDefaultPageForProfile(state.profile, role) : "worker-entry.html";
 }
 
 function emptyRow(message, colspan) {

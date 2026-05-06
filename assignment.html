@@ -70,7 +70,7 @@
               <label>배정할 요청<select name="requestId" id="assignmentRequestSelect" required></select></label>
               <label>인력 검색<input type="search" id="assignmentWorkerSearch" placeholder="이름, 전화번호, 아이디 검색" /></label>
               <label>배정 인력<div class="direct-worker-picker" id="directWorkerPicker"></div></label>
-              <small>배정 결과는 하단 카드가 아니라 배치내역 페이지 표에서 확인됩니다.</small>
+              <small>작업자 회원가입 후 최대 10초 내 목록에 자동 반영됩니다. 배정 결과는 하단 카드가 아니라 배치내역 페이지 표에서 확인됩니다.</small>
               <button type="submit" class="primary-btn">배정 저장</button>
             </form>
           </div>
@@ -79,6 +79,7 @@
     </main>
   </div>
   <script src="supabase-config.js"></script>
+  <script src="access-control.js"></script>
   <script>
     const requestForm = document.getElementById('requestForm');
     const workerForm = document.getElementById('workerForm');
@@ -93,6 +94,8 @@
     const workerSearchInput = document.getElementById('assignmentWorkerSearch');
     const workerPhoneInput = workerForm?.querySelector("input[name='phone']");
     const state = { profile: null, clients: [], requests: [], workers: [], workerProfiles: [], assignments: [], requestDateFilter: '', workerSearchTerm: '', selectedWorkerKeys: new Set() };
+    let workerRosterRefreshTimer = null;
+    let workerRosterRefreshPending = false;
 
     function setMessage(message, isError = true) {
       requestMessage.textContent = message;
@@ -256,6 +259,10 @@
       }
       return data;
     }
+    function isSessionError(error) {
+      const message = String(error?.message || '');
+      return message.includes('로그인') || message.includes('jwt') || message.includes('401') || message.includes('403');
+    }
     function redirectToLogin(message) {
       const params = new URLSearchParams({ redirect: 'assignment.html', role: 'admin', message });
       window.location.href = `index.html?${params.toString()}`;
@@ -266,7 +273,10 @@
         sessionBar.innerHTML = '<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>';
         return;
       }
-      sessionBar.innerHTML = `<span><strong>${escapeHtml(state.profile.name)}</strong> · 관리자 · ${escapeHtml(state.profile.login_id || '')}</span><span class="session-actions"><a class="session-link" href="main.html">메인</a><a class="session-link" href="assignment-history.html">배치내역</a></span>`;
+      const approvalLink = window.accessControl?.canApproveAdminSignups(state.profile)
+        ? '<a class="session-link" href="admin-approvals.html">관리자 승인</a>'
+        : "";
+      sessionBar.innerHTML = `<span><strong>${escapeHtml(state.profile.name)}</strong> · 관리자 · ${escapeHtml(state.profile.login_id || '')}</span><span class="session-actions">${approvalLink}<a class="session-link" href="main.html">메인</a><a class="session-link" href="assignment-history.html">배치내역</a></span>`;
     }
     function renderRequests() {
       if (state.requests.length === 0) {
@@ -475,6 +485,46 @@
       renderWorkers();
       renderRequestOptions();
     }
+    async function refreshWorkerRoster(options = {}) {
+      const { showError = false } = options;
+      if (workerRosterRefreshPending) return;
+      workerRosterRefreshPending = true;
+      try {
+        const [workers, workerProfiles] = await Promise.all([
+          supabaseRest('workers?select=*&order=created_at.desc'),
+          loadWorkerProfiles()
+        ]);
+        state.workers = workers || [];
+        state.workerProfiles = workerProfiles || [];
+        const reconciled = await reconcileWorkerProfiles(workerProfiles || []);
+        if (reconciled.changed) {
+          state.workers = await supabaseRest('workers?select=*&order=created_at.desc');
+          state.workerProfiles = await loadWorkerProfiles();
+        } else {
+          state.workerProfiles = reconciled.profiles || [];
+        }
+        renderWorkers();
+      } catch (error) {
+        if (isSessionError(error)) {
+          redirectToLogin(error.message);
+          return;
+        }
+        if (showError) {
+          setMessage(`작업자 목록 갱신 실패: ${error.message}`);
+        }
+      } finally {
+        workerRosterRefreshPending = false;
+      }
+    }
+    function startWorkerRosterAutoRefresh() {
+      if (workerRosterRefreshTimer) {
+        window.clearInterval(workerRosterRefreshTimer);
+      }
+      workerRosterRefreshTimer = window.setInterval(() => {
+        if (document.hidden) return;
+        refreshWorkerRoster();
+      }, 10000);
+    }
     async function upsertRequestStatus(requestId) {
       const request = state.requests.find((item) => item.id === requestId);
       if (!request) return;
@@ -607,11 +657,15 @@
     async function bootstrap() {
       try {
         const stored = await getValidStoredSession();
-        if (stored.profile.role !== 'admin') { redirectToLogin('관리자 계정으로 로그인해 주세요.'); return; }
+        if (!window.accessControl?.canUseAdminService(stored.profile)) {
+          redirectToLogin(window.accessControl?.getAdminAccessDeniedMessage(stored.profile) || '관리자 계정으로 로그인해 주세요.');
+          return;
+        }
         state.profile = stored.profile;
         renderSession();
         setMessage('현장 배정 데이터를 불러오는 중입니다...', false);
         await loadDashboard();
+        startWorkerRosterAutoRefresh();
         setMessage('현장 배정 페이지가 준비되었습니다.', false);
       } catch (error) {
         redirectToLogin(error.message);
@@ -630,6 +684,14 @@
       renderWorkers();
     });
     workerPhoneInput?.addEventListener('input', syncWorkerPhoneInput);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        refreshWorkerRoster();
+      }
+    });
+    window.addEventListener('focus', () => {
+      refreshWorkerRoster();
+    });
     bootstrap();
   </script>
 </body>

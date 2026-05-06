@@ -59,6 +59,7 @@
   </div>
 
   <script src="supabase-config.js"></script>
+  <script src="access-control.js"></script>
   <script>
     const sessionBar = document.getElementById("sessionBar");
     const authMessage = document.getElementById("authMessage");
@@ -245,6 +246,7 @@
       sessionBar.innerHTML = `
         <span><strong>${escapeHtml(state.profile.name)}</strong> · Admin · ${escapeHtml(state.profile.login_id || "")}</span>
         <span class="session-actions">
+          ${window.accessControl?.canApproveAdminSignups(state.profile) ? '<a class="session-link" href="admin-approvals.html">Admin Approvals</a>' : ""}
           <a class="session-link" href="assignment.html">Assignment</a>
         </span>
       `;
@@ -319,8 +321,8 @@
     async function bootstrap() {
       try {
         const stored = await getValidStoredSession();
-        if (stored.profile.role !== "admin") {
-          redirectToLogin("Please sign in with an admin account.");
+        if (!window.accessControl?.canUseAdminService(stored.profile)) {
+          redirectToLogin(window.accessControl?.getAdminAccessDeniedMessage(stored.profile) || "Please sign in with an admin account.");
           return;
         }
 

@@ -121,6 +121,7 @@
   </div>
 
   <script src="supabase-config.js"></script>
+  <script src="access-control.js"></script>
   <script>
     const sessionBar = document.getElementById("sessionBar");
     const authMessage = document.getElementById("authMessage");
@@ -284,6 +285,7 @@
       sessionBar.innerHTML = `
         <span><strong>${escapeHtml(state.profile.name)}</strong> · 관리자 · ${escapeHtml(state.profile.login_id || "")}</span>
         <span class="session-actions">
+          ${window.accessControl?.canApproveAdminSignups(state.profile) ? '<a class="session-link" href="admin-approvals.html">관리자 승인</a>' : ""}
           <a class="session-link" href="main.html">메인</a>
           <a class="session-link" href="assignment.html">현장 배정</a>
         </span>
@@ -616,8 +618,8 @@
     async function bootstrap() {
       try {
         const stored = await getValidStoredSession();
-        if (stored.profile.role !== "admin") {
-          redirectToLogin("관리자 계정으로 로그인해 주세요.");
+        if (!window.accessControl?.canUseAdminService(stored.profile)) {
+          redirectToLogin(window.accessControl?.getAdminAccessDeniedMessage(stored.profile) || "관리자 계정으로 로그인해 주세요.");
           return;
         }
 
