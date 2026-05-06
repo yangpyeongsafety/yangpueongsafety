@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>회원가입</title>
+  <title>작업자 회원가입</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -15,17 +15,17 @@
 <body data-page="signup" data-role="public">
   <div class="app-shell">
     <div class="session-bar" id="sessionBar">
-      <span>회원가입 페이지입니다.</span>
+      <span>작업자 회원가입 페이지입니다.</span>
       <span class="session-actions">
         <a class="session-link" href="index.html">메인</a>
-        <a class="session-link" href="index.html">로그인</a>
+        <a class="session-link" href="auth.html">계정 선택</a>
       </span>
     </div>
     <header class="hero auth-hero">
       <div>
-        <p class="eyebrow">SIGN UP</p>
-        <h1>회원가입</h1>
-        <p class="hero-copy">관리자 또는 작업자 계정을 등록합니다.</p>
+        <p class="eyebrow">WORKER SIGN UP</p>
+        <h1>작업자 회원가입</h1>
+        <p class="hero-copy">작업자 계정을 등록합니다. 기존 상세 입력 항목은 그대로 유지됩니다.</p>
       </div>
     </header>
     <main class="dashboard">
@@ -38,19 +38,12 @@
           autocomplete="off"
           onsubmit="window.directSignup(event); return false;"
         >
-          <h2>회원가입</h2>
+          <h2>작업자 회원가입</h2>
           <div class="form-grid">
-            <label>
-              권한
-              <select name="role" id="signupRole" required>
-                <option value="worker" selected>작업자</option>
-                <option value="admin">관리자</option>
-              </select>
-            </label>
             <label>
               이름
               <input type="text" name="name" required />
-              <small id="authNameField">작업자는 배정 시 사용하는 이름과 같게 입력해 주세요.</small>
+              <small>작업자는 배정 시 사용하는 이름과 같게 입력해 주세요.</small>
             </label>
             <label>
               주민번호
@@ -140,10 +133,11 @@
               <input type="password" name="signupPassword" required />
             </label>
           </div>
-          <button type="button" class="secondary-btn" onclick="window.directSignup(event)">회원가입</button>
+          <button type="button" class="secondary-btn" onclick="window.directSignup(event)">작업자 회원가입</button>
+          <p class="auth-switch">관리자로 가입하시려면 <a href="admin-signup.html">관리자 회원가입</a> 페이지를 이용해 주세요.</p>
           <p class="auth-switch">이미 계정이 있으면 <a href="index.html">로그인</a>으로 이동해 주세요.</p>
         </form>
-        <p id="authMessage" class="auth-message">회원가입을 준비 중입니다...</p>
+        <p id="authMessage" class="auth-message">작업자 회원가입을 준비 중입니다...</p>
       </section>
     </main>
   </div>
@@ -152,23 +146,9 @@
   <script src="access-control.js"></script>
   <script>
     const signupForm = document.getElementById("signupForm");
-    const signupRoleSelect = document.getElementById("signupRole");
     const authMessage = document.getElementById("authMessage");
-    const authNameField = document.getElementById("authNameField");
     const residentNumberInput = signupForm?.querySelector("input[name='residentNumber']");
     const digitOnlyInputs = signupForm?.querySelectorAll("[data-digits-only='true']") || [];
-    const workerOnlyFieldNames = [
-      "residentNumber",
-      "bankName",
-      "accountNumber",
-      "bloodType",
-      "currentAddress",
-      "emergencyContact",
-      "hireDate"
-    ];
-    const workerOnlyFields = workerOnlyFieldNames
-      .map((fieldName) => signupForm?.querySelector(`[name='${fieldName}']`))
-      .filter(Boolean);
 
     function setSignupMessage(message, isError = true) {
       authMessage.textContent = message;
@@ -215,35 +195,6 @@
       }
     }
 
-    function applyRequestedRole() {
-      const requestedRole = normalizeRole(new URLSearchParams(window.location.search).get("role"));
-      if (signupRoleSelect) {
-        signupRoleSelect.value = requestedRole;
-      }
-      syncSignupRoleFields();
-    }
-
-    function syncSignupRoleFields() {
-      const isAdminSignup = normalizeRole(signupRoleSelect?.value) === "admin";
-      workerOnlyFields.forEach((field) => {
-        const label = field.closest("label");
-        field.dataset.originalRequired = field.dataset.originalRequired || String(field.required);
-        if (label) {
-          label.hidden = isAdminSignup;
-        }
-        field.disabled = isAdminSignup;
-        field.required = !isAdminSignup && field.dataset.originalRequired === "true";
-        if (isAdminSignup) {
-          field.value = "";
-        }
-      });
-      if (authNameField) {
-        authNameField.textContent = isAdminSignup
-          ? "관리자 계정은 이름과 전화번호만 입력한 뒤 승인 대기 상태로 가입됩니다."
-          : "작업자는 배정 시 사용하는 이름과 같게 입력해 주세요.";
-      }
-    }
-
     window.directSignup = async function directSignup(event) {
       if (event) {
         event.preventDefault();
@@ -260,53 +211,41 @@
       syncDigitOnlyInputs();
       syncResidentNumberInput();
       const formData = new FormData(signupForm);
-      const role = normalizeRole(formData.get("role"));
-      const isAdminSignup = role === "admin";
 
       const payload = {
         login_id: readTrimmed(formData, "signupId"),
-        role,
+        role: normalizeRole("worker"),
         name: readTrimmed(formData, "name"),
-        phone: normalizeDigits(formData.get("phone"))
+        resident_number: normalizeResidentNumber(formData.get("residentNumber")),
+        phone: normalizeDigits(formData.get("phone")),
+        bank_name: readTrimmed(formData, "bankName"),
+        account_number: normalizeDigits(formData.get("accountNumber")),
+        blood_type: readTrimmed(formData, "bloodType"),
+        current_address: readTrimmed(formData, "currentAddress"),
+        emergency_contact: normalizeDigits(formData.get("emergencyContact")),
+        hire_date: readTrimmed(formData, "hireDate") || null
       };
-      if (!isAdminSignup) {
-        Object.assign(payload, {
-          resident_number: normalizeResidentNumber(formData.get("residentNumber")),
-          bank_name: readTrimmed(formData, "bankName"),
-          account_number: normalizeDigits(formData.get("accountNumber")),
-          blood_type: readTrimmed(formData, "bloodType"),
-          current_address: readTrimmed(formData, "currentAddress"),
-          emergency_contact: normalizeDigits(formData.get("emergencyContact")),
-          hire_date: readTrimmed(formData, "hireDate") || null
-        });
-      }
       const password = readTrimmed(formData, "signupPassword");
 
-      const requiredKeys = isAdminSignup
-        ? ["login_id", "role", "name", "phone"]
-        : [
-            "login_id",
-            "role",
-            "name",
-            "resident_number",
-            "phone",
-            "bank_name",
-            "account_number",
-            "blood_type",
-            "current_address",
-            "emergency_contact"
-          ];
+      const requiredKeys = [
+        "login_id",
+        "role",
+        "name",
+        "resident_number",
+        "phone",
+        "bank_name",
+        "account_number",
+        "blood_type",
+        "current_address",
+        "emergency_contact"
+      ];
 
       if (!password || requiredKeys.some((key) => !payload[key])) {
-        setSignupMessage(
-          isAdminSignup
-            ? "이름, 전화번호, 아이디, 비밀번호를 모두 입력해 주세요."
-            : "입사일을 제외한 모든 항목을 입력해 주세요."
-        );
+        setSignupMessage("입사일을 제외한 모든 항목을 입력해 주세요.");
         return false;
       }
 
-      if (!isAdminSignup && !isValidResidentNumber(payload.resident_number)) {
+      if (!isValidResidentNumber(payload.resident_number)) {
         setSignupMessage("주민번호는 000000-0000000 형식으로 -를 포함해 입력해 주세요.");
         return false;
       }
@@ -334,15 +273,7 @@
         }
 
         signupForm.reset();
-        applyRequestedRole();
-        setSignupMessage(
-          isAdminSignup
-            ? window.accessControl?.isApproverLoginId(payload.login_id)
-              ? "승인 가능한 관리자 계정이 생성되었습니다. 로그인해 주세요."
-              : "관리자 가입 신청이 접수되었습니다. fulmin2025 또는 envu86 계정의 승인 후 로그인할 수 있습니다."
-            : "회원가입이 완료되었습니다. 로그인 페이지에서 로그인해 주세요.",
-          false
-        );
+        setSignupMessage("작업자 회원가입이 완료되었습니다. 로그인 페이지에서 로그인해 주세요.", false);
       } catch (error) {
         setSignupMessage(`회원가입 요청 실패: ${error.message}`);
       }
@@ -360,9 +291,7 @@
       residentNumberInput.value = normalizeResidentNumber(residentNumberInput.value);
     });
 
-    signupRoleSelect?.addEventListener("change", syncSignupRoleFields);
-    applyRequestedRole();
-    setSignupMessage("회원가입 준비 완료. 정보를 입력하고 버튼을 눌러 주세요.", false);
+    setSignupMessage("작업자 회원가입 준비 완료. 정보를 입력하고 버튼을 눌러 주세요.", false);
   </script>
 </body>
 </html>

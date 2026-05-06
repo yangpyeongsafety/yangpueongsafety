@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>관리자 회원가입</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=SUIT:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="admin-signup" data-role="public">
+  <div class="app-shell">
+    <div class="session-bar" id="sessionBar">
+      <span>관리자 회원가입 페이지입니다.</span>
+      <span class="session-actions">
+        <a class="session-link" href="index.html">메인</a>
+        <a class="session-link" href="auth.html">계정 선택</a>
+      </span>
+    </div>
+    <header class="hero auth-hero">
+      <div>
+        <p class="eyebrow">ADMIN SIGN UP</p>
+        <h1>관리자 회원가입</h1>
+        <p class="hero-copy">관리자는 이름, 전화번호, 아이디, 비밀번호만 입력해 가입할 수 있으며 승인 후 이용 가능합니다.</p>
+      </div>
+    </header>
+    <main class="dashboard">
+      <section class="panel auth-panel auth-single-panel">
+        <form
+          id="adminSignupForm"
+          class="subpanel stack-form"
+          method="post"
+          action="#"
+          autocomplete="off"
+          onsubmit="window.directAdminSignup(event); return false;"
+        >
+          <h2>관리자 회원가입</h2>
+          <label>
+            이름
+            <input type="text" name="name" required />
+            <small>관리자 이름을 입력해 주세요.</small>
+          </label>
+          <label>
+            전화번호
+            <input
+              type="text"
+              name="phone"
+              inputmode="numeric"
+              data-digits-only="true"
+              placeholder="01012345678"
+              required
+            />
+            <small>전화번호는 - 없이 숫자만 입력해 주세요.</small>
+          </label>
+          <label>
+            아이디
+            <input type="text" name="signupId" required />
+          </label>
+          <label>
+            비밀번호
+            <input type="password" name="signupPassword" required />
+          </label>
+          <button type="button" class="secondary-btn" onclick="window.directAdminSignup(event)">관리자 회원가입</button>
+          <p class="auth-switch">작업자로 가입하시려면 <a href="signup.html">작업자 회원가입</a> 페이지를 이용해 주세요.</p>
+          <p class="auth-switch">이미 계정이 있으면 <a href="index.html">로그인</a>으로 이동해 주세요.</p>
+        </form>
+        <p id="authMessage" class="auth-message">관리자 회원가입을 준비 중입니다...</p>
+      </section>
+    </main>
+  </div>
+
+  <script src="supabase-config.js"></script>
+  <script src="access-control.js"></script>
+  <script>
+    const adminSignupForm = document.getElementById("adminSignupForm");
+    const authMessage = document.getElementById("authMessage");
+    const digitOnlyInputs = adminSignupForm?.querySelectorAll("[data-digits-only='true']") || [];
+
+    function setSignupMessage(message, isError = true) {
+      authMessage.textContent = message;
+      authMessage.className = isError ? "auth-message error" : "auth-message success";
+    }
+
+    function signupEmail(loginId) {
+      return window.accessControl?.toAuthEmail(loginId);
+    }
+
+    function normalizeDigits(value) {
+      return window.accessControl?.normalizePhone(value) || String(value || "").replace(/\D+/g, "");
+    }
+
+    function normalizeRole(value) {
+      return window.accessControl?.normalizeRole(value) || (value === "admin" ? "admin" : "worker");
+    }
+
+    function readTrimmed(formData, key) {
+      return String(formData.get(key) || "").trim();
+    }
+
+    function syncDigitOnlyInputs() {
+      digitOnlyInputs.forEach((input) => {
+        input.value = normalizeDigits(input.value);
+      });
+    }
+
+    window.directAdminSignup = async function directAdminSignup(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      setSignupMessage("관리자 회원가입을 처리 중입니다...", false);
+
+      if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+        setSignupMessage("Supabase 설정을 불러오지 못했습니다. supabase-config.js를 확인해 주세요.");
+        return false;
+      }
+
+      syncDigitOnlyInputs();
+      const formData = new FormData(adminSignupForm);
+      const payload = {
+        login_id: readTrimmed(formData, "signupId"),
+        role: normalizeRole("admin"),
+        name: readTrimmed(formData, "name"),
+        phone: normalizeDigits(formData.get("phone"))
+      };
+      const password = readTrimmed(formData, "signupPassword");
+      const requiredKeys = ["login_id", "role", "name", "phone"];
+
+      if (!password || requiredKeys.some((key) => !payload[key])) {
+        setSignupMessage("이름, 전화번호, 아이디, 비밀번호를 모두 입력해 주세요.");
+        return false;
+      }
+
+      try {
+        const response = await fetch(`${window.SUPABASE_URL}/auth/v1/signup`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: window.SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${window.SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            email: signupEmail(payload.login_id),
+            password,
+            data: payload
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          setSignupMessage(`회원가입 실패: ${result.msg || result.message || "Supabase 오류가 발생했습니다."}`);
+          return false;
+        }
+
+        adminSignupForm.reset();
+        setSignupMessage(
+          window.accessControl?.isApproverLoginId(payload.login_id)
+            ? "승인 가능한 관리자 계정이 생성되었습니다. 로그인해 주세요."
+            : "관리자 가입 신청이 접수되었습니다. fulmin2025 또는 envu86 계정의 승인 후 로그인할 수 있습니다.",
+          false
+        );
+      } catch (error) {
+        setSignupMessage(`회원가입 요청 실패: ${error.message}`);
+      }
+
+      return false;
+    };
+
+    digitOnlyInputs.forEach((input) => {
+      input.addEventListener("input", () => {
+        input.value = normalizeDigits(input.value);
+      });
+    });
+
+    setSignupMessage("관리자 회원가입 준비 완료. 정보를 입력하고 버튼을 눌러 주세요.", false);
+  </script>
+</body>
+</html>
