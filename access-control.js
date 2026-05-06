@@ -10,7 +10,7 @@
   }
 
   function normalizeRole(value) {
-    return value === "worker" || value === "user" ? "worker" : "admin";
+    return value === "admin" ? "admin" : "worker";
   }
 
   function isWorkerRole(role) {
