@@ -136,6 +136,13 @@
       return { address: "", postcode: "" };
     }
 
+    function buildAddressNote(address, postcode) {
+      const parts = [];
+      if (address) parts.push(`업체주소: ${address}`);
+      if (postcode) parts.push(`우편번호: ${postcode}`);
+      return parts.join("\n");
+    }
+
     function getClientAddress(client) {
       return client?.address || getRequestAddressInfo(client?.id).address || "";
     }
@@ -268,6 +275,32 @@
       renderClients();
     }
 
+    async function saveAddressFallback(client, address, postcode, createdBy) {
+      if (!client?.id || !address) return;
+      const today = new Date().toISOString().slice(0, 10);
+      const note = buildAddressNote(address, postcode);
+      const current = getRequestAddressInfo(client.id);
+      if (current.address === address && current.postcode === postcode) return;
+      const rows = await supabaseRest("job_requests", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({
+          client_id: client.id,
+          contact_method: "업체관리",
+          headcount: 1,
+          site_location: address,
+          work_date: today,
+          status: "업체정보",
+          notes: note,
+          created_by: createdBy
+        })
+      });
+      const row = rows?.[0];
+      if (row) {
+        state.requests = [row, ...(state.requests || [])];
+      }
+    }
+
     async function loadClients() {
       const [clients, requests] = await Promise.all([
         supabaseRest("clients?select=*&order=name.asc"),
@@ -360,6 +393,7 @@
             savedClient = { ...(created?.[0] || {}), name, address, postcode };
           }
         }
+        await saveAddressFallback(savedClient, address, postcode, stored.profile.id);
         upsertClientInState(savedClient);
         resetForm();
         try {

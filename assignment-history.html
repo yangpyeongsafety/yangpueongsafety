@@ -225,6 +225,10 @@
       return value ? new Date(`${value}T00:00:00`).toLocaleDateString("ko-KR") : "-";
     }
 
+    function isClientAddressRecord(request) {
+      return request?.status === "업체정보" || request?.contact_method === "업체관리";
+    }
+
     function buildStatus(headcount, assignedCount) {
       if (headcount > 0 && assignedCount >= headcount) return "완료";
       if (assignedCount > 0) return `${assignedCount}/${headcount}명 배정`;
@@ -339,7 +343,7 @@
         ]);
 
         state.clients = clients || [];
-        state.requests = requests || [];
+        state.requests = (requests || []).filter((request) => !isClientAddressRecord(request));
         state.workers = workers || [];
         state.workerProfiles = workerProfiles || [];
         state.assignments = assignments || [];

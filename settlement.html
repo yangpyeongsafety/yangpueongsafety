@@ -110,6 +110,10 @@
         .replaceAll("'", "&#039;");
     }
 
+    function isClientAddressRecord(request) {
+      return request?.status === "업체정보" || request?.contact_method === "업체관리";
+    }
+
     function getStoredSession() {
       try {
         const raw = localStorage.getItem("workforce.session");
@@ -390,7 +394,7 @@
         supabaseRest("work_logs?select=*&order=updated_at.desc")
       ]);
       state.clients = clients || [];
-      state.requests = requests || [];
+      state.requests = (requests || []).filter((request) => !isClientAddressRecord(request));
       state.workers = workers || [];
       state.workerProfiles = workerProfiles || [];
       state.assignments = assignments || [];
