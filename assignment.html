@@ -637,7 +637,11 @@
           return;
         }
         await saveAssignmentsSequentially(requestId, selectedWorkers, stored.profile.id);
-        await upsertRequestStatus(requestId);
+        try {
+          await upsertRequestStatus(requestId);
+        } catch (syncError) {
+          console.error("Assignment saved, but follow-up sync failed.", syncError);
+        }
         assignmentForm.reset();
         state.requestDateFilter = '';
         state.workerSearchTerm = '';
