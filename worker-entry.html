@@ -19,7 +19,7 @@
         <p class="hero-copy">배정된 항목을 선택한 뒤 시작시간, 종료시간, 휴게시간을 입력하면 실근무시간과 공수가 자동 계산됩니다.</p>
       </div>
       <nav class="top-nav">
-        <a href="main.html">메인으로</a>
+        <a href="worker-entry.html">작업자 메인</a>
         <a class="ghost-btn" href="logout.html">로그아웃</a>
       </nav>
     </header>
@@ -180,7 +180,7 @@
         sessionBar.innerHTML = '<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>';
         return;
       }
-      sessionBar.innerHTML = `<span><strong>${escapeHtml(state.profile.name)}</strong> · 작업자 · ${escapeHtml(state.profile.login_id || '')}</span><span class="session-actions"><a class="session-link" href="main.html">메인</a></span>`;
+      sessionBar.innerHTML = `<span><strong>${escapeHtml(state.profile.name)}</strong> · 작업자 · ${escapeHtml(state.profile.login_id || '')}</span><span class="session-actions"><a class="session-link" href="worker-entry.html">작업자 메인</a><a class="session-link" href="logout.html">로그아웃</a></span>`;
     }
     function getLog(assignmentId) { return state.workLogs.find((log) => log.assignment_id === assignmentId); }
     function getRequest(requestId) {
