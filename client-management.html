@@ -261,6 +261,13 @@
       `).join("");
     }
 
+    function upsertClientInState(client) {
+      if (!client?.id) return;
+      const others = (state.clients || []).filter((item) => item.id !== client.id);
+      state.clients = [client, ...others].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+      renderClients();
+    }
+
     async function loadClients() {
       const [clients, requests] = await Promise.all([
         supabaseRest("clients?select=*&order=name.asc"),
@@ -333,21 +340,27 @@
       try {
         setMessage("업체 정보를 저장하는 중입니다...", false);
         const payload = { name, address, postcode };
+        let savedClient = null;
         if (clientId) {
           try {
-            await supabaseRest(`clients?id=eq.${clientId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(payload) });
+            const updated = await supabaseRest(`clients?id=eq.${clientId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(payload) });
+            savedClient = updated?.[0] || null;
           } catch (error) {
             if (!isClientAddressSchemaError(error)) throw error;
-            await supabaseRest(`clients?id=eq.${clientId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ name }) });
+            const updated = await supabaseRest(`clients?id=eq.${clientId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ name }) });
+            savedClient = { ...(updated?.[0] || {}), id: clientId, name, address, postcode };
           }
         } else {
           try {
-            await supabaseRest("clients?on_conflict=name", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ ...payload, created_by: stored.profile.id }) });
+            const created = await supabaseRest("clients?on_conflict=name", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ ...payload, created_by: stored.profile.id }) });
+            savedClient = created?.[0] || null;
           } catch (error) {
             if (!isClientAddressSchemaError(error)) throw error;
-            await supabaseRest("clients?on_conflict=name", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ name, created_by: stored.profile.id }) });
+            const created = await supabaseRest("clients?on_conflict=name", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ name, created_by: stored.profile.id }) });
+            savedClient = { ...(created?.[0] || {}), name, address, postcode };
           }
         }
+        upsertClientInState(savedClient);
         resetForm();
         try {
           await loadClients();
