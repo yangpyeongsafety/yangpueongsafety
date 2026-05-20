@@ -492,6 +492,24 @@
       return (rows || []).length > 0;
     }
 
+    async function deleteWorkerAccount(profileId) {
+      try {
+        const deleted = await supabaseRest("rpc/delete_worker_account", {
+          method: "POST",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify({ target_profile_id: profileId })
+        });
+        if (deleted !== true) {
+          throw new Error("Supabase RPC가 삭제 완료를 반환하지 않았습니다.");
+        }
+      } catch (error) {
+        if (/delete_worker_account|schema cache|function/i.test(String(error.message || ""))) {
+          throw new Error("Supabase SQL Editor에서 fix-delete-worker-account.sql을 먼저 실행해 주세요.");
+        }
+        throw error;
+      }
+    }
+
     async function createWorkerFromProfile(profile) {
       const created = await supabaseRest("workers", {
         method: "POST",
@@ -611,32 +629,9 @@
 
       try {
         setMessage("작업자 계정을 삭제하는 중입니다...", false);
-        if (profileAssignments.length > 0) {
-          const assignmentIds = profileAssignments.map((assignment) => assignment.id).filter(Boolean);
-          const encodedAssignmentIds = assignmentIds.map(encodeURIComponent).join(",");
-          await supabaseRest(`work_logs?assignment_id=in.(${encodedAssignmentIds})`, {
-            method: "DELETE",
-            headers: { Prefer: "return=minimal" }
-          });
-          await supabaseRest(`assignments?id=in.(${encodedAssignmentIds})`, {
-            method: "DELETE",
-            headers: { Prefer: "return=minimal" }
-          });
-        }
-
-        await supabaseRest(`profiles?id=eq.${profile.id}`, {
-          method: "DELETE",
-          headers: { Prefer: "return=minimal" }
-        });
+        await deleteWorkerAccount(profile.id);
         if (await profileExists(profile.id)) {
-          throw new Error("Supabase에서 작업자 프로필이 삭제되지 않았습니다. DB 권한 정책 또는 Auth 사용자 연결을 확인해 주세요.");
-        }
-
-        if (canDeleteWorkerRecord) {
-          await supabaseRest(`workers?id=eq.${worker.id}`, {
-            method: "DELETE",
-            headers: { Prefer: "return=minimal" }
-          });
+          throw new Error("Supabase에서 작업자 프로필이 삭제되지 않았습니다. fix-delete-worker-account.sql 실행 여부를 확인해 주세요.");
         }
 
         state.workerProfiles = state.workerProfiles.filter((item) => item.id !== profile.id);
