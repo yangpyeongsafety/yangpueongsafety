@@ -568,6 +568,9 @@
       if (ensured.profile?.id) updateStateWorkerProfile(ensured.profile);
       return ensured.worker;
     }
+    function isWorkerForeignKeyError(error) {
+      return /assignments_worker_id_fkey|foreign key constraint/i.test(String(error?.message || error || ''));
+    }
     async function insertAssignmentRow(requestId, workerId, createdBy) {
       await supabaseRest('assignments?on_conflict=request_id,worker_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ request_id: requestId, worker_id: workerId, created_by: createdBy }) });
     }
@@ -588,7 +591,17 @@
     async function saveAssignmentsSequentially(requestId, selectedWorkers, createdBy) {
       for (const selectedWorker of selectedWorkers) {
         const worker = await resolveAssignmentWorker(selectedWorker);
-        await insertAssignmentRow(requestId, worker.id, createdBy);
+        try {
+          await insertAssignmentRow(requestId, worker.id, createdBy);
+        } catch (error) {
+          if (!isWorkerForeignKeyError(error)) throw error;
+          const repaired = await createWorkerRecord({
+            ...selectedWorker,
+            rawName: selectedWorker.rawName || worker.name,
+            rawPhone: selectedWorker.rawPhone || worker.phone
+          });
+          await insertAssignmentRow(requestId, repaired.id, createdBy);
+        }
       }
     }
     async function handleRequestSubmit(event) {
