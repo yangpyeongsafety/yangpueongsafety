@@ -121,6 +121,17 @@
     function isClientAddressSchemaError(error) {
       return /address|postcode|schema cache|column/i.test(String(error?.message || error || ''));
     }
+    function buildAddressNote(address, postcode) {
+      const parts = [];
+      if (address) parts.push(`업체주소: ${address}`);
+      if (postcode) parts.push(`우편번호: ${postcode}`);
+      return parts.join('\n');
+    }
+    function getRequestFallbackAddress(request) {
+      const note = String(request?.notes || '');
+      const match = note.match(/업체주소:\s*([^\n]+)/);
+      return match?.[1]?.trim() || '';
+    }
     function openClientAddressSearch() {
       if (!window.daum?.Postcode) {
         setMessage('주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
@@ -316,7 +327,8 @@
         const client = clientMap.get(request.client_id);
         const assignedCount = getAssignedCount(request.id);
         const status = buildRequestStatus(request, assignedCount);
-        return `<tr><td>${escapeHtml(client?.name || '-')}</td><td>${escapeHtml(client?.address || '-')}</td><td>${escapeHtml(formatContactMethod(request.contact_method))}</td><td>${assignedCount}/${Number(request.headcount || 0)}명</td><td>${escapeHtml(request.site_location || '-')}</td><td>${formatDate(request.work_date)}</td><td><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></td></tr>`;
+        const clientAddress = client?.address || getRequestFallbackAddress(request);
+        return `<tr><td>${escapeHtml(client?.name || '-')}</td><td>${escapeHtml(clientAddress || '-')}</td><td>${escapeHtml(formatContactMethod(request.contact_method))}</td><td>${assignedCount}/${Number(request.headcount || 0)}명</td><td>${escapeHtml(request.site_location || '-')}</td><td>${formatDate(request.work_date)}</td><td><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></td></tr>`;
       }).join('');
     }
     function renderWorkers() {
@@ -665,18 +677,24 @@
       if (!clientName || !clientAddress || !contactMethod || headcount <= 0 || !siteLocation || !workDate) { setMessage('현장 요청 항목을 모두 입력해 주세요. 업체 주소는 주소 검색으로 선택해 주세요.'); return; }
       try {
         setMessage('현장 요청을 저장하는 중입니다...', false);
-        const clients = await supabaseRest('clients?on_conflict=name', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ name: clientName, address: clientAddress, postcode: clientPostcode, created_by: stored.profile.id }) });
+        let clients = null;
+        let savedClientAddress = true;
+        try {
+          clients = await supabaseRest('clients?on_conflict=name', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ name: clientName, address: clientAddress, postcode: clientPostcode, created_by: stored.profile.id }) });
+        } catch (error) {
+          if (!isClientAddressSchemaError(error)) throw error;
+          savedClientAddress = false;
+          clients = await supabaseRest('clients?on_conflict=name', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ name: clientName, created_by: stored.profile.id }) });
+        }
         const client = clients?.[0];
         if (!client?.id) throw new Error('업체 정보를 저장하지 못했습니다.');
-        await supabaseRest('job_requests', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ client_id: client.id, contact_method: contactMethod, headcount, site_location: siteLocation, work_date: workDate, status: '대기', created_by: stored.profile.id }) });
+        const requestPayload = { client_id: client.id, contact_method: contactMethod, headcount, site_location: siteLocation, work_date: workDate, status: '대기', created_by: stored.profile.id };
+        if (!savedClientAddress) requestPayload.notes = buildAddressNote(clientAddress, clientPostcode);
+        await supabaseRest('job_requests', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(requestPayload) });
         requestForm.reset();
         await loadDashboard();
-        setMessage('현장 요청이 저장되었습니다.', false);
+        setMessage(savedClientAddress ? '현장 요청이 저장되었습니다.' : '현장 요청이 저장되었습니다. 업체 주소 전용 저장은 Supabase SQL 적용 후부터 완전 반영됩니다.', false);
       } catch (error) {
-        if (isClientAddressSchemaError(error)) {
-          setMessage('현장 요청 저장 실패: Supabase SQL Editor에서 fix-client-address-management.sql을 먼저 실행해 주세요.');
-          return;
-        }
         setMessage(`현장 요청 저장 실패: ${error.message}`);
       }
     }
