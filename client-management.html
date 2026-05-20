@@ -115,6 +115,10 @@
       return /address|postcode|schema cache|column/i.test(String(error?.message || error || ""));
     }
 
+    function hasClientAddressColumns() {
+      return state.clients.some((client) => Object.prototype.hasOwnProperty.call(client, "address") || Object.prototype.hasOwnProperty.call(client, "postcode"));
+    }
+
     function formatDate(value) {
       return value ? new Date(value).toLocaleDateString("ko-KR") : "-";
     }
@@ -300,18 +304,24 @@
         setMessage("업체 정보를 저장하는 중입니다...", false);
         const payload = { name, address, postcode };
         if (clientId) {
-          await supabaseRest(`clients?id=eq.${clientId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(payload) });
+          try {
+            await supabaseRest(`clients?id=eq.${clientId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(payload) });
+          } catch (error) {
+            if (!isClientAddressSchemaError(error)) throw error;
+            await supabaseRest(`clients?id=eq.${clientId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ name }) });
+          }
         } else {
-          await supabaseRest("clients?on_conflict=name", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ ...payload, created_by: stored.profile.id }) });
+          try {
+            await supabaseRest("clients?on_conflict=name", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ ...payload, created_by: stored.profile.id }) });
+          } catch (error) {
+            if (!isClientAddressSchemaError(error)) throw error;
+            await supabaseRest("clients?on_conflict=name", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ name, created_by: stored.profile.id }) });
+          }
         }
         resetForm();
         await loadClients();
-        setMessage("업체 정보를 저장했습니다.", false);
+        setMessage(hasClientAddressColumns() ? "업체 정보를 저장했습니다." : "업체명을 저장했습니다. 주소 전용 저장은 Supabase SQL 적용 후부터 반영됩니다.", false);
       } catch (error) {
-        if (isClientAddressSchemaError(error)) {
-          setMessage("업체 저장 실패: Supabase SQL Editor에서 fix-client-address-management.sql을 먼저 실행해 주세요.");
-          return;
-        }
         setMessage(`업체 저장 실패: ${error.message}`);
       }
     }
