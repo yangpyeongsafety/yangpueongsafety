@@ -21,6 +21,7 @@
       <nav class="top-nav">
         <a href="main.html">메인</a>
         <a href="worker-management.html">인력관리</a>
+        <a href="client-management.html">업체관리</a>
         <a href="assignment-history.html">배치내역</a>
         <a href="settlement.html">정산</a>
         <a class="ghost-btn" href="logout.html">로그아웃</a>
@@ -33,10 +34,17 @@
             <p class="section-kicker">1. 현장 요청</p>
             <h2>업장 요청 등록</h2>
           </div>
-          <div class="page-tools"><a class="page-link-btn" href="assignment-history.html">배치내역 보기</a></div>
+          <div class="page-tools"><a class="page-link-btn" href="client-management.html">업체관리</a><a class="page-link-btn" href="assignment-history.html">배치내역 보기</a></div>
         </div>
         <form id="requestForm" class="form-grid" autocomplete="off">
           <label>업체명<input type="text" name="clientName" placeholder="예: 만보" required /></label>
+          <label class="full-width">업체 주소
+            <div class="address-search-row">
+              <input type="text" name="clientAddress" id="clientAddressInput" placeholder="주소 검색 버튼으로 선택" readonly required />
+              <input type="hidden" name="clientPostcode" id="clientPostcodeInput" />
+              <button type="button" class="secondary-btn" id="clientAddressSearchButton">주소 검색</button>
+            </div>
+          </label>
           <label>연락 방식<select name="contactMethod" required><option value="문자">문자</option><option value="전화">전화</option></select></label>
           <label>필요 인원<input type="number" name="headcount" min="1" placeholder="2" required /></label>
           <label>현장명<input type="text" name="siteLocation" placeholder="양평 현장" required /></label>
@@ -46,7 +54,7 @@
         <p id="authMessage" class="auth-message"></p>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>업체명</th><th>연락 방식</th><th>배정 현황</th><th>현장명</th><th>작업일</th><th>상태</th></tr></thead>
+            <thead><tr><th>업체명</th><th>업체 주소</th><th>연락 방식</th><th>배정 현황</th><th>현장명</th><th>작업일</th><th>상태</th></tr></thead>
             <tbody id="requestsTable"></tbody>
           </table>
         </div>
@@ -78,6 +86,7 @@
       </section>
     </main>
   </div>
+  <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
   <script src="supabase-config.js"></script>
   <script src="access-control.js"></script>
   <script>
@@ -92,6 +101,9 @@
     const workerPicker = document.getElementById('directWorkerPicker');
     const requestDateFilterInput = document.getElementById('assignmentRequestDateFilter');
     const workerSearchInput = document.getElementById('assignmentWorkerSearch');
+    const clientAddressInput = document.getElementById('clientAddressInput');
+    const clientPostcodeInput = document.getElementById('clientPostcodeInput');
+    const clientAddressSearchButton = document.getElementById('clientAddressSearchButton');
     const workerPhoneInput = workerForm?.querySelector("input[name='phone']");
     const state = { profile: null, clients: [], requests: [], workers: [], workerProfiles: [], assignments: [], requestDateFilter: '', workerSearchTerm: '', selectedWorkerKeys: new Set() };
     let workerRosterRefreshTimer = null;
@@ -106,6 +118,22 @@
     }
     function normalizeText(value) { return String(value || '').replace(/\s+/g, '').trim(); }
     function normalizePhone(value) { return String(value || '').replace(/\D+/g, ''); }
+    function isClientAddressSchemaError(error) {
+      return /address|postcode|schema cache|column/i.test(String(error?.message || error || ''));
+    }
+    function openClientAddressSearch() {
+      if (!window.daum?.Postcode) {
+        setMessage('주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+        return;
+      }
+      new window.daum.Postcode({
+        oncomplete(data) {
+          const address = data.roadAddress || data.jibunAddress || data.address || '';
+          clientAddressInput.value = address;
+          clientPostcodeInput.value = data.zonecode || '';
+        }
+      }).open();
+    }
     function syncWorkerPhoneInput() {
       if (workerPhoneInput) workerPhoneInput.value = normalizePhone(workerPhoneInput.value);
     }
@@ -280,7 +308,7 @@
     }
     function renderRequests() {
       if (state.requests.length === 0) {
-        requestsTable.innerHTML = '<tr><td colspan="6" class="empty">등록된 현장 요청이 없습니다.</td></tr>';
+        requestsTable.innerHTML = '<tr><td colspan="7" class="empty">등록된 현장 요청이 없습니다.</td></tr>';
         return;
       }
       const clientMap = new Map(state.clients.map((client) => [client.id, client]));
@@ -288,7 +316,7 @@
         const client = clientMap.get(request.client_id);
         const assignedCount = getAssignedCount(request.id);
         const status = buildRequestStatus(request, assignedCount);
-        return `<tr><td>${escapeHtml(client?.name || '-')}</td><td>${escapeHtml(formatContactMethod(request.contact_method))}</td><td>${assignedCount}/${Number(request.headcount || 0)}명</td><td>${escapeHtml(request.site_location || '-')}</td><td>${formatDate(request.work_date)}</td><td><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></td></tr>`;
+        return `<tr><td>${escapeHtml(client?.name || '-')}</td><td>${escapeHtml(client?.address || '-')}</td><td>${escapeHtml(formatContactMethod(request.contact_method))}</td><td>${assignedCount}/${Number(request.headcount || 0)}명</td><td>${escapeHtml(request.site_location || '-')}</td><td>${formatDate(request.work_date)}</td><td><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></td></tr>`;
       }).join('');
     }
     function renderWorkers() {
@@ -628,14 +656,16 @@
       const stored = await getValidStoredSession();
       const formData = new FormData(requestForm);
       const clientName = String(formData.get('clientName') || '').trim();
+      const clientAddress = String(formData.get('clientAddress') || '').trim();
+      const clientPostcode = String(formData.get('clientPostcode') || '').trim();
       const contactMethod = String(formData.get('contactMethod') || '').trim();
       const headcount = Number(formData.get('headcount') || 0);
       const siteLocation = String(formData.get('siteLocation') || '').trim();
       const workDate = String(formData.get('workDate') || '').trim();
-      if (!clientName || !contactMethod || headcount <= 0 || !siteLocation || !workDate) { setMessage('현장 요청 항목을 모두 입력해 주세요.'); return; }
+      if (!clientName || !clientAddress || !contactMethod || headcount <= 0 || !siteLocation || !workDate) { setMessage('현장 요청 항목을 모두 입력해 주세요. 업체 주소는 주소 검색으로 선택해 주세요.'); return; }
       try {
         setMessage('현장 요청을 저장하는 중입니다...', false);
-        const clients = await supabaseRest('clients?on_conflict=name', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ name: clientName, created_by: stored.profile.id }) });
+        const clients = await supabaseRest('clients?on_conflict=name', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ name: clientName, address: clientAddress, postcode: clientPostcode, created_by: stored.profile.id }) });
         const client = clients?.[0];
         if (!client?.id) throw new Error('업체 정보를 저장하지 못했습니다.');
         await supabaseRest('job_requests', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ client_id: client.id, contact_method: contactMethod, headcount, site_location: siteLocation, work_date: workDate, status: '대기', created_by: stored.profile.id }) });
@@ -643,6 +673,10 @@
         await loadDashboard();
         setMessage('현장 요청이 저장되었습니다.', false);
       } catch (error) {
+        if (isClientAddressSchemaError(error)) {
+          setMessage('현장 요청 저장 실패: Supabase SQL Editor에서 fix-client-address-management.sql을 먼저 실행해 주세요.');
+          return;
+        }
         setMessage(`현장 요청 저장 실패: ${error.message}`);
       }
     }
@@ -725,6 +759,8 @@
     workerForm.addEventListener('submit', handleWorkerSubmit);
     assignmentForm.addEventListener('submit', handleAssignmentSubmit);
     workerPicker.addEventListener('change', handleWorkerPickerChange);
+    clientAddressSearchButton?.addEventListener('click', openClientAddressSearch);
+    clientAddressInput?.addEventListener('click', openClientAddressSearch);
     requestDateFilterInput?.addEventListener('change', () => {
       state.requestDateFilter = requestDateFilterInput.value;
       renderRequestOptions();

@@ -56,12 +56,16 @@ create unique index if not exists profiles_login_id_key on public.profiles (logi
 create table if not exists public.clients (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
+  address text,
+  postcode text,
   created_by uuid references public.profiles(id),
   created_at timestamptz not null default now()
 );
 
 alter table public.clients
   add column if not exists name text,
+  add column if not exists address text,
+  add column if not exists postcode text,
   add column if not exists created_by uuid references public.profiles(id),
   add column if not exists created_at timestamptz not null default now();
 

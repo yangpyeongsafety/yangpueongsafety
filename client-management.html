@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>업체관리</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=SUIT:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="client-management" data-role="admin">
+  <div class="app-shell">
+    <div class="session-bar" id="sessionBar"></div>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">CLIENT MANAGEMENT</p>
+        <h1>업체 정보와 주소를 관리하세요</h1>
+        <p class="hero-copy">업장 요청에 사용할 업체명과 정확한 주소를 주소 검색으로 등록하고 수정할 수 있습니다.</p>
+      </div>
+      <nav class="top-nav">
+        <a href="main.html">메인</a>
+        <a href="assignment.html">현장 배정</a>
+        <a href="worker-management.html">인력관리</a>
+        <a href="assignment-history.html">배치내역</a>
+        <a class="ghost-btn" href="logout.html">로그아웃</a>
+      </nav>
+    </header>
+
+    <main class="dashboard">
+      <section class="panel panel-highlight">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">1. 업체 등록</p>
+            <h2 id="formTitle">업체 추가</h2>
+          </div>
+          <div class="page-tools">
+            <button type="button" class="secondary-btn" id="resetButton">새 업체 입력</button>
+          </div>
+        </div>
+        <form id="clientForm" class="form-grid" autocomplete="off">
+          <input type="hidden" name="clientId" id="clientIdInput" />
+          <label>업체명<input type="text" name="name" id="clientNameInput" placeholder="예: 만보" required /></label>
+          <label>우편번호<input type="text" name="postcode" id="postcodeInput" placeholder="주소 검색 시 자동 입력" readonly /></label>
+          <label class="full-width">주소
+            <div class="address-search-row">
+              <input type="text" name="address" id="addressInput" placeholder="주소 검색 버튼으로 선택" readonly required />
+              <button type="button" class="secondary-btn" id="addressSearchButton">주소 검색</button>
+            </div>
+          </label>
+          <button type="submit" class="primary-btn">업체 저장</button>
+        </form>
+        <p id="authMessage" class="auth-message"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="section-kicker">2. 업체 목록</p>
+            <h2>등록된 업체</h2>
+          </div>
+        </div>
+        <div class="toolbar-row">
+          <label>검색<input type="search" id="clientSearchInput" placeholder="업체명 또는 주소 검색" /></label>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>업체명</th><th>주소</th><th>우편번호</th><th>등록일</th><th>관리</th></tr>
+            </thead>
+            <tbody id="clientTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="access-control.js"></script>
+  <script>
+    const sessionBar = document.getElementById("sessionBar");
+    const authMessage = document.getElementById("authMessage");
+    const clientForm = document.getElementById("clientForm");
+    const formTitle = document.getElementById("formTitle");
+    const clientIdInput = document.getElementById("clientIdInput");
+    const clientNameInput = document.getElementById("clientNameInput");
+    const addressInput = document.getElementById("addressInput");
+    const postcodeInput = document.getElementById("postcodeInput");
+    const addressSearchButton = document.getElementById("addressSearchButton");
+    const resetButton = document.getElementById("resetButton");
+    const clientSearchInput = document.getElementById("clientSearchInput");
+    const clientTable = document.getElementById("clientTable");
+    const state = { profile: null, clients: [], searchTerm: "" };
+
+    function setMessage(message, isError = true) {
+      authMessage.textContent = message;
+      authMessage.className = isError ? "auth-message error" : "auth-message success";
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function normalizeText(value) {
+      return String(value || "").replace(/\s+/g, "").trim().toLowerCase();
+    }
+
+    function isClientAddressSchemaError(error) {
+      return /address|postcode|schema cache|column/i.test(String(error?.message || error || ""));
+    }
+
+    function formatDate(value) {
+      return value ? new Date(value).toLocaleDateString("ko-KR") : "-";
+    }
+
+    function getStoredSession() {
+      try {
+        const raw = localStorage.getItem("workforce.session");
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    async function refreshStoredSession(stored) {
+      if (!stored?.auth?.refresh_token) {
+        throw new Error("로그인 정보가 없습니다. 다시 로그인해 주세요.");
+      }
+      const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: window.SUPABASE_ANON_KEY },
+        body: JSON.stringify({ refresh_token: stored.auth.refresh_token })
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.msg || data?.message || "로그인이 만료되었습니다. 다시 로그인해 주세요.");
+      const next = {
+        ...stored,
+        auth: {
+          ...stored.auth,
+          access_token: data.access_token,
+          refresh_token: data.refresh_token || stored.auth.refresh_token,
+          expires_at: data.expires_at
+        }
+      };
+      localStorage.setItem("workforce.session", JSON.stringify(next));
+      return next;
+    }
+
+    async function getValidStoredSession() {
+      const stored = getStoredSession();
+      if (!stored?.auth?.access_token || !stored?.profile?.id) {
+        throw new Error("관리자 로그인 정보가 없습니다. 다시 로그인해 주세요.");
+      }
+      const expiresAt = Number(stored.auth.expires_at || 0);
+      if (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 60) {
+        return refreshStoredSession(stored);
+      }
+      return stored;
+    }
+
+    async function supabaseRest(path, options = {}, retry = true) {
+      const stored = await getValidStoredSession();
+      const response = await fetch(`${window.SUPABASE_URL}/rest/v1/${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${stored.auth.access_token}`,
+          ...(options.headers || {})
+        }
+      });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+      if (!response.ok) {
+        const message = data?.message || data?.msg || response.statusText;
+        if (retry && /jwt expired/i.test(message)) {
+          await refreshStoredSession(stored);
+          return supabaseRest(path, options, false);
+        }
+        throw new Error(message);
+      }
+      return data;
+    }
+
+    function redirectToLogin(message) {
+      const params = new URLSearchParams({ redirect: "client-management.html", role: "admin", message });
+      window.location.href = `index.html?${params.toString()}`;
+    }
+
+    function renderSession() {
+      if (!state.profile) {
+        sessionBar.innerHTML = '<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>';
+        return;
+      }
+      const approvalLink = window.accessControl?.canApproveAdminSignups(state.profile)
+        ? '<a class="session-link" href="admin-approvals.html">관리자 승인</a>'
+        : "";
+      sessionBar.innerHTML = `<span><strong>${escapeHtml(state.profile.name)}</strong> · 관리자 · ${escapeHtml(state.profile.login_id || "")}</span><span class="session-actions">${approvalLink}<a class="session-link" href="main.html">메인</a><a class="session-link" href="assignment.html">현장 배정</a></span>`;
+    }
+
+    function getFilteredClients() {
+      const keyword = normalizeText(state.searchTerm);
+      if (!keyword) return state.clients;
+      return state.clients.filter((client) => normalizeText(`${client.name || ""} ${client.address || ""} ${client.postcode || ""}`).includes(keyword));
+    }
+
+    function renderClients() {
+      const clients = getFilteredClients();
+      if (clients.length === 0) {
+        clientTable.innerHTML = '<tr><td colspan="5" class="empty">등록된 업체가 없습니다.</td></tr>';
+        return;
+      }
+      clientTable.innerHTML = clients.map((client) => `
+        <tr>
+          <td>${escapeHtml(client.name || "-")}</td>
+          <td>${escapeHtml(client.address || "-")}</td>
+          <td>${escapeHtml(client.postcode || "-")}</td>
+          <td>${formatDate(client.created_at)}</td>
+          <td>
+            <div class="table-actions">
+              <button type="button" class="secondary-btn" data-action="edit" data-id="${escapeHtml(client.id)}">수정</button>
+              <button type="button" class="danger-btn" data-action="delete" data-id="${escapeHtml(client.id)}">삭제</button>
+            </div>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadClients() {
+      state.clients = await supabaseRest("clients?select=*&order=name.asc") || [];
+      renderClients();
+    }
+
+    function resetForm() {
+      clientForm.reset();
+      clientIdInput.value = "";
+      formTitle.textContent = "업체 추가";
+      clientNameInput.focus();
+    }
+
+    function openAddressSearch() {
+      if (!window.daum?.Postcode) {
+        setMessage("주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      new window.daum.Postcode({
+        oncomplete(data) {
+          addressInput.value = data.roadAddress || data.jibunAddress || data.address || "";
+          postcodeInput.value = data.zonecode || "";
+        }
+      }).open();
+    }
+
+    function editClient(clientId) {
+      const client = state.clients.find((item) => item.id === clientId);
+      if (!client) return;
+      clientIdInput.value = client.id;
+      clientNameInput.value = client.name || "";
+      addressInput.value = client.address || "";
+      postcodeInput.value = client.postcode || "";
+      formTitle.textContent = "업체 수정";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    async function deleteClient(clientId) {
+      const client = state.clients.find((item) => item.id === clientId);
+      if (!client) return;
+      const ok = window.confirm(`${client.name || "선택한 업체"}를 삭제할까요? 연결된 현장 요청과 배정 내역도 함께 삭제될 수 있습니다.`);
+      if (!ok) return;
+      try {
+        setMessage("업체를 삭제하는 중입니다...", false);
+        await supabaseRest(`clients?id=eq.${clientId}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+        resetForm();
+        await loadClients();
+        setMessage("업체를 삭제했습니다.", false);
+      } catch (error) {
+        setMessage(`업체 삭제 실패: ${error.message}`);
+      }
+    }
+
+    async function handleClientSubmit(event) {
+      event.preventDefault();
+      const stored = await getValidStoredSession();
+      const formData = new FormData(clientForm);
+      const clientId = String(formData.get("clientId") || "").trim();
+      const name = String(formData.get("name") || "").trim();
+      const address = String(formData.get("address") || "").trim();
+      const postcode = String(formData.get("postcode") || "").trim();
+      if (!name || !address) {
+        setMessage("업체명과 주소를 입력해 주세요. 주소는 주소 검색으로 선택해 주세요.");
+        return;
+      }
+      try {
+        setMessage("업체 정보를 저장하는 중입니다...", false);
+        const payload = { name, address, postcode };
+        if (clientId) {
+          await supabaseRest(`clients?id=eq.${clientId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(payload) });
+        } else {
+          await supabaseRest("clients?on_conflict=name", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ ...payload, created_by: stored.profile.id }) });
+        }
+        resetForm();
+        await loadClients();
+        setMessage("업체 정보를 저장했습니다.", false);
+      } catch (error) {
+        if (isClientAddressSchemaError(error)) {
+          setMessage("업체 저장 실패: Supabase SQL Editor에서 fix-client-address-management.sql을 먼저 실행해 주세요.");
+          return;
+        }
+        setMessage(`업체 저장 실패: ${error.message}`);
+      }
+    }
+
+    async function bootstrap() {
+      try {
+        const stored = await getValidStoredSession();
+        if (!window.accessControl?.canUseAdminService(stored.profile)) {
+          redirectToLogin(window.accessControl?.getAdminAccessDeniedMessage(stored.profile) || "관리자 계정으로 로그인해 주세요.");
+          return;
+        }
+        state.profile = stored.profile;
+        renderSession();
+        setMessage("업체 목록을 불러오는 중입니다...", false);
+        await loadClients();
+        setMessage("업체관리 페이지가 준비되었습니다.", false);
+      } catch (error) {
+        redirectToLogin(error.message);
+      }
+    }
+
+    clientForm.addEventListener("submit", handleClientSubmit);
+    resetButton.addEventListener("click", resetForm);
+    addressSearchButton.addEventListener("click", openAddressSearch);
+    addressInput.addEventListener("click", openAddressSearch);
+    clientSearchInput.addEventListener("input", () => {
+      state.searchTerm = clientSearchInput.value;
+      renderClients();
+    });
+    clientTable.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const clientId = button.dataset.id || "";
+      if (button.dataset.action === "edit") editClient(clientId);
+      if (button.dataset.action === "delete") deleteClient(clientId);
+    });
+    bootstrap();
+  </script>
+</body>
+</html>

@@ -253,6 +253,17 @@ h1 {
   grid-column: 1 / -1;
 }
 
+.address-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.address-search-row button {
+  white-space: nowrap;
+}
+
 label {
   display: grid;
   gap: 8px;
@@ -645,6 +656,10 @@ small {
   .menu-grid,
   .auth-layout,
   .worker-entry-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .address-search-row {
     grid-template-columns: 1fr;
   }
 
