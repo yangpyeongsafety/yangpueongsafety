@@ -169,7 +169,7 @@
     function isWorkerRole(role) { return role === 'worker' || role === 'user'; }
     function isSessionError(error) {
       const message = String(error?.message || '');
-      return message.includes('로그인') || message.includes('jwt') || message.includes('401') || message.includes('403');
+      return message.includes('로그인') || message.includes('jwt') || message.includes('401');
     }
     function redirectToLogin(message) {
       const params = new URLSearchParams({ redirect: 'worker-entry.html', role: 'worker', message });
@@ -272,12 +272,16 @@
       } catch {}
     }
     async function loadWorkerAssignments() {
-      if (!state.profile?.worker_id) return [];
-      return supabaseRest(`assignments?select=id,worker_id,request_id,created_at&worker_id=eq.${state.profile.worker_id}&order=created_at.desc`);
+      const workerIds = [state.profile?.worker_id, state.profile?.id].filter(Boolean);
+      if (workerIds.length === 0) return [];
+      const encodedIds = workerIds.map((workerId) => encodeURIComponent(workerId)).join(',');
+      return supabaseRest(`assignments?select=id,worker_id,request_id,created_at&worker_id=in.(${encodedIds})&order=created_at.desc`);
     }
     async function loadWorkerLogs() {
-      if (!state.profile?.worker_id) return [];
-      return supabaseRest(`work_logs?select=*&worker_id=eq.${state.profile.worker_id}&order=updated_at.desc`);
+      const workerIds = [state.profile?.worker_id, state.profile?.id].filter(Boolean);
+      if (workerIds.length === 0) return [];
+      const encodedIds = workerIds.map((workerId) => encodeURIComponent(workerId)).join(',');
+      return supabaseRest(`work_logs?select=*&worker_id=in.(${encodedIds})&order=updated_at.desc`);
     }
     async function loadWorkerRequests(requestIds = []) {
       if (!requestIds || requestIds.length === 0) return [];
@@ -286,7 +290,7 @@
     }
     async function loadWorkerPage() {
       state.requestLoadError = '';
-      if (!state.profile?.worker_id) {
+      if (!state.profile?.worker_id && !state.profile?.id) {
         state.assignments = [];
         state.workLogs = [];
         state.requests = [];
