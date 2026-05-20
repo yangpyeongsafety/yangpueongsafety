@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Assignment History</title>
+  <title>배정 내역</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -17,14 +17,14 @@
     <div class="session-bar" id="sessionBar"></div>
     <header class="hero">
       <div>
-        <p class="eyebrow">ASSIGNMENT HISTORY</p>
-        <h1>Assigned Site Summary</h1>
-        <p class="hero-copy">Check each site, assigned worker list, and matched phone numbers in one place.</p>
+        <p class="eyebrow">배정 내역</p>
+        <h1>현장별 배정 현황</h1>
+        <p class="hero-copy">현장별 요청 정보, 배정된 작업자 목록, 연결된 연락처를 한 곳에서 확인합니다.</p>
       </div>
       <nav class="top-nav">
-        <a href="main.html">Main</a>
-        <a href="assignment.html">Assignment</a>
-        <a class="ghost-btn" href="logout.html">Logout</a>
+        <a href="main.html">메인</a>
+        <a href="assignment.html">현장 배정</a>
+        <a class="ghost-btn" href="logout.html">로그아웃</a>
       </nav>
     </header>
 
@@ -32,8 +32,8 @@
       <section class="panel panel-highlight">
         <div class="panel-header">
           <div>
-            <p class="section-kicker">History</p>
-            <h2>Assignment Status</h2>
+            <p class="section-kicker">배정 기록</p>
+            <h2>배정 현황</h2>
           </div>
         </div>
 
@@ -43,12 +43,12 @@
           <table>
             <thead>
               <tr>
-                <th>Client</th>
-                <th>Site</th>
-                <th>Work Date</th>
-                <th>Assigned</th>
-                <th>Status</th>
-                <th>Workers</th>
+                <th>거래처</th>
+                <th>현장</th>
+                <th>작업일</th>
+                <th>배정 인원</th>
+                <th>상태</th>
+                <th>작업자</th>
               </tr>
             </thead>
             <tbody id="historyTable"></tbody>
@@ -155,7 +155,7 @@
 
     async function refreshStoredSession(stored) {
       const refreshToken = stored?.auth?.refresh_token;
-      if (!refreshToken) throw new Error("Login expired. Please sign in again.");
+      if (!refreshToken) throw new Error("로그인이 만료되었습니다. 다시 로그인해 주세요.");
 
       const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
         method: "POST",
@@ -169,7 +169,7 @@
       const data = await response.json();
       if (!response.ok) {
         localStorage.removeItem("workforce.session");
-        throw new Error(data?.message || "Login expired. Please sign in again.");
+        throw new Error(data?.message || "로그인이 만료되었습니다. 다시 로그인해 주세요.");
       }
 
       return saveStoredSession(stored, data);
@@ -178,7 +178,7 @@
     async function getValidStoredSession() {
       const stored = getStoredSession();
       if (!stored?.auth?.access_token || !stored?.profile) {
-        throw new Error("Admin session not found. Please sign in again.");
+        throw new Error("관리자 로그인 정보를 찾을 수 없습니다. 다시 로그인해 주세요.");
       }
       const expiresAt = Number(stored.auth.expires_at || 0);
       if (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 60) {
@@ -226,28 +226,28 @@
     }
 
     function buildStatus(headcount, assignedCount) {
-      if (headcount > 0 && assignedCount >= headcount) return "Complete";
-      if (assignedCount > 0) return `${assignedCount}/${headcount} assigned`;
-      return "Waiting";
+      if (headcount > 0 && assignedCount >= headcount) return "완료";
+      if (assignedCount > 0) return `${assignedCount}/${headcount}명 배정`;
+      return "대기";
     }
 
     function statusClass(status) {
-      if (status === "Complete") return "complete";
-      if (String(status || "").includes("assigned")) return "progress";
+      if (status === "완료") return "complete";
+      if (String(status || "").includes("배정")) return "progress";
       return "waiting";
     }
 
     function renderSession() {
       if (!state.profile) {
-        sessionBar.innerHTML = '<span>No session.</span><a class="session-link" href="index.html">Login</a>';
+        sessionBar.innerHTML = '<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>';
         return;
       }
 
       sessionBar.innerHTML = `
-        <span><strong>${escapeHtml(state.profile.name)}</strong> · Admin · ${escapeHtml(state.profile.login_id || "")}</span>
+        <span><strong>${escapeHtml(state.profile.name)}</strong> · 관리자 · ${escapeHtml(state.profile.login_id || "")}</span>
         <span class="session-actions">
-          ${window.accessControl?.canApproveAdminSignups(state.profile) ? '<a class="session-link" href="admin-approvals.html">Admin Approvals</a>' : ""}
-          <a class="session-link" href="assignment.html">Assignment</a>
+          ${window.accessControl?.canApproveAdminSignups(state.profile) ? '<a class="session-link" href="admin-approvals.html">관리자 승인</a>' : ""}
+          <a class="session-link" href="assignment.html">현장 배정</a>
         </span>
       `;
     }
@@ -300,7 +300,7 @@
     function renderHistory() {
       const rows = buildRows();
       if (rows.length === 0) {
-        historyTable.innerHTML = '<tr><td colspan="6" class="empty">No assignments found.</td></tr>';
+        historyTable.innerHTML = '<tr><td colspan="6" class="empty">배정 내역이 없습니다.</td></tr>';
         return;
       }
 
@@ -322,13 +322,13 @@
       try {
         const stored = await getValidStoredSession();
         if (!window.accessControl?.canUseAdminService(stored.profile)) {
-          redirectToLogin(window.accessControl?.getAdminAccessDeniedMessage(stored.profile) || "Please sign in with an admin account.");
+          redirectToLogin(window.accessControl?.getAdminAccessDeniedMessage(stored.profile) || "관리자 계정으로 로그인해 주세요.");
           return;
         }
 
         state.profile = stored.profile;
         renderSession();
-        setMessage("Loading assignment history...", false);
+        setMessage("배정 내역을 불러오는 중입니다...", false);
 
         const [clients, requests, workers, workerProfiles, assignments] = await Promise.all([
           supabaseRest("clients?select=*&order=name.asc"),
@@ -345,7 +345,7 @@
         state.assignments = assignments || [];
 
         renderHistory();
-        setMessage("Assignment history is ready.", false);
+        setMessage("배정 내역을 불러왔습니다.", false);
       } catch (error) {
         redirectToLogin(error.message);
       }
