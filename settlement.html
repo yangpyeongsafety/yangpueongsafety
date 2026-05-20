@@ -43,6 +43,14 @@
             거래처 필터
             <select id="reportClientFilter"></select>
           </label>
+          <label>
+            시작일
+            <input type="date" id="reportStartDate" />
+          </label>
+          <label>
+            종료일
+            <input type="date" id="reportEndDate" />
+          </label>
         </div>
         <div class="summary-grid" id="clientSummaryGrid"></div>
         <div class="table-wrap">
@@ -72,6 +80,8 @@
     const sessionBar = document.getElementById("sessionBar");
     const authMessage = document.getElementById("authMessage");
     const reportClientFilter = document.getElementById("reportClientFilter");
+    const reportStartDate = document.getElementById("reportStartDate");
+    const reportEndDate = document.getElementById("reportEndDate");
     const clientSummaryGrid = document.getElementById("clientSummaryGrid");
     const reportTable = document.getElementById("reportTable");
     const exportCsvBtn = document.getElementById("exportCsvBtn");
@@ -202,6 +212,41 @@
       return value ? new Date(`${value}T00:00:00`).toLocaleDateString("ko-KR") : "-";
     }
 
+    function toDateInputValue(date) {
+      return date.toISOString().slice(0, 10);
+    }
+
+    function addMonths(date, months) {
+      const next = new Date(date);
+      next.setMonth(next.getMonth() + months);
+      return next;
+    }
+
+    function initializeDateFilters() {
+      const today = new Date();
+      const sixMonthsAgo = addMonths(today, -6);
+      reportEndDate.value = toDateInputValue(today);
+      reportStartDate.value = toDateInputValue(sixMonthsAgo);
+      reportStartDate.max = reportEndDate.value;
+      reportEndDate.max = reportEndDate.value;
+    }
+
+    function getDateRangeError() {
+      const start = reportStartDate.value;
+      const end = reportEndDate.value;
+      if (!start || !end) return "시작일과 종료일을 선택해 주세요.";
+      if (start > end) return "시작일은 종료일보다 늦을 수 없습니다.";
+      if (addMonths(new Date(`${start}T00:00:00`), 6) < new Date(`${end}T00:00:00`)) {
+        return "조회 기간은 최대 6개월까지 선택할 수 있습니다.";
+      }
+      return "";
+    }
+
+    function isWithinDateRange(workDate) {
+      if (!workDate) return false;
+      return workDate >= reportStartDate.value && workDate <= reportEndDate.value;
+    }
+
     function formatDateTime(value) {
       if (!value) return "-";
       return new Intl.DateTimeFormat("ko-KR", {
@@ -238,6 +283,7 @@
 
     function getReportRows() {
       const filterValue = reportClientFilter.value || "all";
+      if (getDateRangeError()) return [];
       return state.assignments
         .map((assignment) => {
           const request = getRequest(assignment.request_id);
@@ -255,6 +301,7 @@
             gongsu: Number(log?.labor_units || 0)
           };
         })
+        .filter((row) => isWithinDateRange(row.workDate))
         .filter((row) => row.workHours > 0 || row.gongsu > 0 || row.checkIn || row.checkOut)
         .filter((row) => filterValue === "all" || row.clientName === filterValue)
         .sort((a, b) => String(a.workDate).localeCompare(String(b.workDate)) || a.clientName.localeCompare(b.clientName, "ko") || a.workerName.localeCompare(b.workerName, "ko"));
@@ -270,6 +317,11 @@
     }
 
     function renderClientSummary() {
+      const rangeError = getDateRangeError();
+      if (rangeError) {
+        clientSummaryGrid.innerHTML = `<p class="empty">${escapeHtml(rangeError)}</p>`;
+        return;
+      }
       const rows = getReportRows();
       if (rows.length === 0) {
         clientSummaryGrid.innerHTML = '<p class="empty">거래처별 근무 요약이 아직 없습니다.</p>';
@@ -295,6 +347,12 @@
     }
 
     function renderReports() {
+      const rangeError = getDateRangeError();
+      if (rangeError) {
+        reportTable.innerHTML = `<tr><td colspan="8" class="empty">${escapeHtml(rangeError)}</td></tr>`;
+        setMessage(rangeError);
+        return;
+      }
       const rows = getReportRows();
       if (rows.length === 0) {
         reportTable.innerHTML = '<tr><td colspan="8" class="empty">조회할 정산 데이터가 없습니다.</td></tr>';
@@ -315,6 +373,8 @@
     }
 
     function renderAll() {
+      reportStartDate.max = reportEndDate.value || reportEndDate.max;
+      reportEndDate.min = reportStartDate.value || "";
       renderClientFilter();
       renderClientSummary();
       renderReports();
@@ -338,6 +398,11 @@
     }
 
     function exportCsv() {
+      const rangeError = getDateRangeError();
+      if (rangeError) {
+        setMessage(rangeError);
+        return;
+      }
       const rows = getReportRows().map((row) => [
         row.clientName,
         formatDate(row.workDate),
@@ -348,6 +413,10 @@
         formatHours(row.workHours),
         formatGongsu(row.gongsu)
       ]);
+      if (rows.length === 0) {
+        setMessage("다운로드할 정산 데이터가 없습니다.");
+        return;
+      }
       const csv = [["거래처명", "근무일", "현장 위치", "인력명", "출근시간", "퇴근시간", "실근무시간", "공수"], ...rows]
         .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","))
         .join("\n");
@@ -369,6 +438,7 @@
         }
         state.profile = stored.profile;
         renderSession();
+        initializeDateFilters();
         setMessage("정산 데이터를 불러오는 중입니다...", false);
         await loadSettlement();
         renderAll();
@@ -382,6 +452,8 @@
     }
 
     reportClientFilter.addEventListener("change", renderAll);
+    reportStartDate.addEventListener("change", renderAll);
+    reportEndDate.addEventListener("change", renderAll);
     exportCsvBtn.addEventListener("click", exportCsv);
     bootstrap();
   </script>
