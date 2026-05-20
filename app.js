@@ -124,7 +124,20 @@ async function hydrateSession() {
   }
 
   const fallback = loadFallbackSession();
-  state.session = fallback?.auth ? { user: fallback.auth.user, access_token: fallback.auth.access_token } : null;
+  if (fallback?.auth?.access_token && fallback?.auth?.refresh_token) {
+    try {
+      const { data: restored } = await supabase.auth.setSession({
+        access_token: fallback.auth.access_token,
+        refresh_token: fallback.auth.refresh_token
+      });
+      state.session = restored.session || { user: fallback.auth.user, access_token: fallback.auth.access_token };
+    } catch (error) {
+      console.error(error);
+      state.session = { user: fallback.auth.user, access_token: fallback.auth.access_token };
+    }
+  } else {
+    state.session = fallback?.auth ? { user: fallback.auth.user, access_token: fallback.auth.access_token } : null;
+  }
   state.profile = fallback?.profile || null;
 }
 
@@ -242,6 +255,10 @@ async function loadPageData() {
       supabase.from("assignments").select("*").order("created_at", { ascending: false }),
       supabase.from("work_logs").select("*")
     ]);
+    const loadError = [workersRes, profilesRes, clientsRes, requestsRes, assignmentsRes, workLogsRes].find((result) => result.error)?.error;
+    if (loadError) {
+      throw loadError;
+    }
     state.workers = workersRes.data || [];
     state.workerProfiles = profilesRes.data || [];
     state.clients = clientsRes.data || [];
