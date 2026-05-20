@@ -115,6 +115,10 @@
       return /address|postcode|schema cache|column/i.test(String(error?.message || error || ""));
     }
 
+    function isOldAddressSetupMessage(error) {
+      return /fix-client-address-management\.sql|SQL Editor/i.test(String(error?.message || error || ""));
+    }
+
     function hasClientAddressColumns() {
       return state.clients.some((client) => Object.prototype.hasOwnProperty.call(client, "address") || Object.prototype.hasOwnProperty.call(client, "postcode"));
     }
@@ -345,9 +349,17 @@
           }
         }
         resetForm();
-        await loadClients();
+        try {
+          await loadClients();
+        } catch (reloadError) {
+          console.warn("Client saved, but client list reload failed.", reloadError);
+        }
         setMessage(hasClientAddressColumns() ? "업체 정보를 저장했습니다." : "업체명을 저장했습니다. 주소 전용 저장은 Supabase SQL 적용 후부터 반영됩니다.", false);
       } catch (error) {
+        if (isOldAddressSetupMessage(error) || isClientAddressSchemaError(error)) {
+          setMessage("업체 저장 중 주소 컬럼 오류가 감지되었습니다. 새로고침 후 다시 시도해 주세요.", false);
+          return;
+        }
         setMessage(`업체 저장 실패: ${error.message}`);
       }
     }
