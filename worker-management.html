@@ -487,6 +487,11 @@
       return { ...worker, ...normalizedPatch };
     }
 
+    async function profileExists(profileId) {
+      const rows = await supabaseRest(`profiles?select=id&id=eq.${profileId}`);
+      return (rows || []).length > 0;
+    }
+
     async function createWorkerFromProfile(profile) {
       const created = await supabaseRest("workers", {
         method: "POST",
@@ -623,6 +628,9 @@
           method: "DELETE",
           headers: { Prefer: "return=minimal" }
         });
+        if (await profileExists(profile.id)) {
+          throw new Error("Supabase에서 작업자 프로필이 삭제되지 않았습니다. DB 권한 정책 또는 Auth 사용자 연결을 확인해 주세요.");
+        }
 
         if (canDeleteWorkerRecord) {
           await supabaseRest(`workers?id=eq.${worker.id}`, {
@@ -631,6 +639,7 @@
           });
         }
 
+        state.workerProfiles = state.workerProfiles.filter((item) => item.id !== profile.id);
         await loadPageData();
         setMessage(canDeleteWorkerRecord ? "작업자 계정과 연결 인력 정보를 함께 삭제했습니다." : "작업자 계정을 삭제했습니다.", false);
       } catch (error) {
