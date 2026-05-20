@@ -8,6 +8,7 @@ const state = {
   session: null,
   profile: null,
   workers: [],
+  workerProfiles: [],
   clients: [],
   requests: [],
   assignments: [],
@@ -233,14 +234,16 @@ async function loadPageData() {
   }
 
   if (state.profile?.role === "admin") {
-    const [workersRes, clientsRes, requestsRes, assignmentsRes, workLogsRes] = await Promise.all([
+    const [workersRes, profilesRes, clientsRes, requestsRes, assignmentsRes, workLogsRes] = await Promise.all([
       supabase.from("workers").select("*").order("name"),
+      supabase.from("profiles").select("id,role,name,phone,worker_id,login_id").eq("role", "worker").order("created_at", { ascending: false }),
       supabase.from("clients").select("*").order("name"),
       supabase.from("job_requests").select("*").order("work_date", { ascending: false }),
       supabase.from("assignments").select("*").order("created_at", { ascending: false }),
       supabase.from("work_logs").select("*")
     ]);
     state.workers = workersRes.data || [];
+    state.workerProfiles = profilesRes.data || [];
     state.clients = clientsRes.data || [];
     state.requests = requestsRes.data || [];
     state.assignments = assignmentsRes.data || [];
@@ -255,6 +258,7 @@ async function loadPageData() {
     supabase.from("work_logs").select("*")
   ]);
   state.workers = workersRes.data || [];
+  state.workerProfiles = [];
   state.requests = requestsRes.data || [];
   state.assignments = (assignmentsRes.data || []).filter(
     (assignment) => assignment.worker_id === state.profile?.worker_id
@@ -847,7 +851,12 @@ function getRequest(id) {
 }
 
 function getWorker(id) {
-  return state.workers.find((item) => item.id === id);
+  const worker = state.workers.find((item) => item.id === id);
+  if (worker) {
+    return worker;
+  }
+  const profile = state.workerProfiles.find((item) => item.id === id || item.worker_id === id);
+  return profile ? { id, name: profile.name, phone: profile.phone } : null;
 }
 
 function calculateWorkMetrics(startTime, endTime, breakMinutes) {
