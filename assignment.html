@@ -571,9 +571,23 @@
     async function insertAssignmentRow(requestId, workerId, createdBy) {
       await supabaseRest('assignments?on_conflict=request_id,worker_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ request_id: requestId, worker_id: workerId, created_by: createdBy }) });
     }
+    async function resolveAssignmentWorker(selectedWorker) {
+      const ensured = await ensureWorkerProfile(selectedWorker);
+      const candidateId = ensured?.worker?.id || ensured?.id || ensured?.worker_id || '';
+      if (candidateId) {
+        const verified = await supabaseRest(`workers?select=id,name,phone&id=eq.${candidateId}`);
+        if (verified?.[0]?.id) return verified[0];
+      }
+      const repaired = await ensureWorkerRecord({
+        ...selectedWorker,
+        workerRecordId: ''
+      });
+      if (repaired.worker?.id) return repaired.worker;
+      throw new Error('배정할 인력 정보를 workers 테이블에 연결하지 못했습니다.');
+    }
     async function saveAssignmentsSequentially(requestId, selectedWorkers, createdBy) {
       for (const selectedWorker of selectedWorkers) {
-        const worker = await ensureWorkerProfile(selectedWorker);
+        const worker = await resolveAssignmentWorker(selectedWorker);
         await insertAssignmentRow(requestId, worker.id, createdBy);
       }
     }
