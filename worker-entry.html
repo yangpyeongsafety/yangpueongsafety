@@ -75,7 +75,7 @@
     const manualBreakMinutes = document.getElementById('manualBreakMinutes');
     const manualPreview = document.getElementById('manualPreview');
     const manualEntryTable = document.getElementById('manualEntryTable');
-    const state = { profile: null, assignments: [], workLogs: [], requests: [], requestLoadError: '' };
+    const state = { profile: null, assignments: [], workLogs: [], requests: [], clients: [], requestLoadError: '' };
 
     function setMessage(message, isError = true) {
       authMessage.textContent = message;
@@ -186,6 +186,13 @@
     function getRequest(requestId) {
       return state.requests.find((request) => request.id === requestId) || null;
     }
+    function getClient(clientId) {
+      return state.clients.find((client) => client.id === clientId) || null;
+    }
+    function formatAssignmentClient(assignment) {
+      const request = getRequest(assignment.request_id);
+      return getClient(request?.client_id)?.name || '업체명 확인 필요';
+    }
     function formatAssignmentTitle(assignment) {
       const request = getRequest(assignment.request_id);
       return request?.site_location || `배정 ${String(assignment.id || '').slice(0, 8)}`;
@@ -199,7 +206,7 @@
       const assignedDate = new Date(assignment.created_at).toLocaleDateString('ko-KR');
       if (!request) return `작업일 확인 필요 · 배정일 ${assignedDate}`;
       const headcountLabel = Number(request.headcount || 0) > 0 ? `${Number(request.headcount)}명 요청` : '인원 확인 필요';
-      return `${formatAssignmentDate(assignment)} · ${headcountLabel} · 배정일 ${assignedDate}`;
+      return `${formatAssignmentClient(assignment)} · ${formatAssignmentDate(assignment)} · ${headcountLabel} · 배정일 ${assignedDate}`;
     }
     function renderAssignmentCards() {
       if (state.assignments.length === 0) {
@@ -218,7 +225,7 @@
         return;
       }
       const currentValue = manualAssignmentSelect.value;
-      manualAssignmentSelect.innerHTML = state.assignments.map((assignment) => `<option value="${assignment.id}">${formatAssignmentDate(assignment)} / ${escapeHtml(formatAssignmentTitle(assignment))} / 배치완료</option>`).join('');
+      manualAssignmentSelect.innerHTML = state.assignments.map((assignment) => `<option value="${assignment.id}">${escapeHtml(formatAssignmentClient(assignment))} / ${formatAssignmentDate(assignment)} / ${escapeHtml(formatAssignmentTitle(assignment))} / 배치완료</option>`).join('');
       const nextValue = state.assignments.some((assignment) => assignment.id === currentValue) ? currentValue : state.assignments[0].id;
       manualAssignmentSelect.value = nextValue;
       applyManualSelection();
@@ -231,7 +238,7 @@
       manualEntryTable.innerHTML = state.assignments.map((assignment) => {
         const log = getLog(assignment.id);
         const status = log && (Number(log.work_hours || 0) > 0 || Number(log.labor_units || 0) > 0) ? '입력 완료' : '입력 전';
-        return `<tr><td>${escapeHtml(formatAssignmentTitle(assignment))}</td><td>${formatAssignmentDate(assignment)}</td><td><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></td><td>${formatHours(log?.work_hours || 0)}</td><td>${formatGongsu(log?.labor_units || 0)}</td></tr>`;
+        return `<tr><td>${escapeHtml(formatAssignmentClient(assignment))} / ${escapeHtml(formatAssignmentTitle(assignment))}</td><td>${formatAssignmentDate(assignment)}</td><td><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></td><td>${formatHours(log?.work_hours || 0)}</td><td>${formatGongsu(log?.labor_units || 0)}</td></tr>`;
       }).join('');
     }
     function updateManualPreview(forceError = false) {
@@ -288,12 +295,19 @@
       const encodedIds = requestIds.map((requestId) => encodeURIComponent(requestId)).join(',');
       return supabaseRest(`job_requests?select=id,client_id,site_location,work_date,headcount,status&id=in.(${encodedIds})&order=work_date.desc`);
     }
+    async function loadWorkerClients(requests = []) {
+      const clientIds = Array.from(new Set((requests || []).map((request) => request.client_id).filter(Boolean)));
+      if (clientIds.length === 0) return [];
+      const encodedIds = clientIds.map((clientId) => encodeURIComponent(clientId)).join(',');
+      return supabaseRest(`clients?select=id,name&id=in.(${encodedIds})&order=name.asc`);
+    }
     async function loadWorkerPage() {
       state.requestLoadError = '';
       if (!state.profile?.worker_id && !state.profile?.id) {
         state.assignments = [];
         state.workLogs = [];
         state.requests = [];
+        state.clients = [];
         renderAssignmentCards();
         renderAssignmentOptions();
         renderManualEntryTable();
@@ -308,9 +322,14 @@
         return [];
       });
       const [workLogs, requests] = await Promise.all([workLogsPromise, requestsPromise]);
+      const clients = await loadWorkerClients(requests).catch((error) => {
+        state.requestLoadError = error.message || 'client load failed';
+        return [];
+      });
       state.assignments = assignments || [];
       state.workLogs = workLogs || [];
       state.requests = requests || [];
+      state.clients = clients || [];
       renderAssignmentCards();
       renderAssignmentOptions();
       renderManualEntryTable();
