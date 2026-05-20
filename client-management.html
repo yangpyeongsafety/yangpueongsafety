@@ -91,7 +91,7 @@
     const resetButton = document.getElementById("resetButton");
     const clientSearchInput = document.getElementById("clientSearchInput");
     const clientTable = document.getElementById("clientTable");
-    const state = { profile: null, clients: [], searchTerm: "" };
+    const state = { profile: null, clients: [], requests: [], searchTerm: "" };
 
     function setMessage(message, isError = true) {
       authMessage.textContent = message;
@@ -117,6 +117,27 @@
 
     function hasClientAddressColumns() {
       return state.clients.some((client) => Object.prototype.hasOwnProperty.call(client, "address") || Object.prototype.hasOwnProperty.call(client, "postcode"));
+    }
+
+    function getRequestAddressInfo(clientId) {
+      const requests = (state.requests || [])
+        .filter((request) => request.client_id === clientId && request.notes)
+        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+      for (const request of requests) {
+        const note = String(request.notes || "");
+        const address = note.match(/업체주소:\s*([^\n]+)/)?.[1]?.trim() || "";
+        const postcode = note.match(/우편번호:\s*([^\n]+)/)?.[1]?.trim() || "";
+        if (address || postcode) return { address, postcode };
+      }
+      return { address: "", postcode: "" };
+    }
+
+    function getClientAddress(client) {
+      return client?.address || getRequestAddressInfo(client?.id).address || "";
+    }
+
+    function getClientPostcode(client) {
+      return client?.postcode || getRequestAddressInfo(client?.id).postcode || "";
     }
 
     function formatDate(value) {
@@ -211,7 +232,7 @@
     function getFilteredClients() {
       const keyword = normalizeText(state.searchTerm);
       if (!keyword) return state.clients;
-      return state.clients.filter((client) => normalizeText(`${client.name || ""} ${client.address || ""} ${client.postcode || ""}`).includes(keyword));
+      return state.clients.filter((client) => normalizeText(`${client.name || ""} ${getClientAddress(client)} ${getClientPostcode(client)}`).includes(keyword));
     }
 
     function renderClients() {
@@ -223,8 +244,8 @@
       clientTable.innerHTML = clients.map((client) => `
         <tr>
           <td>${escapeHtml(client.name || "-")}</td>
-          <td>${escapeHtml(client.address || "-")}</td>
-          <td>${escapeHtml(client.postcode || "-")}</td>
+          <td>${escapeHtml(getClientAddress(client) || "-")}</td>
+          <td>${escapeHtml(getClientPostcode(client) || "-")}</td>
           <td>${formatDate(client.created_at)}</td>
           <td>
             <div class="table-actions">
@@ -237,7 +258,12 @@
     }
 
     async function loadClients() {
-      state.clients = await supabaseRest("clients?select=*&order=name.asc") || [];
+      const [clients, requests] = await Promise.all([
+        supabaseRest("clients?select=*&order=name.asc"),
+        supabaseRest("job_requests?select=client_id,notes,created_at&order=created_at.desc")
+      ]);
+      state.clients = clients || [];
+      state.requests = requests || [];
       renderClients();
     }
 
@@ -266,8 +292,8 @@
       if (!client) return;
       clientIdInput.value = client.id;
       clientNameInput.value = client.name || "";
-      addressInput.value = client.address || "";
-      postcodeInput.value = client.postcode || "";
+      addressInput.value = getClientAddress(client);
+      postcodeInput.value = getClientPostcode(client);
       formTitle.textContent = "업체 수정";
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
