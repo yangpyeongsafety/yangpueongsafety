@@ -17,13 +17,13 @@
     <div class="session-bar" id="sessionBar"></div>
     <header class="hero">
       <div>
-        <p class="eyebrow">SETTLEMENT</p>
-        <h1>거래처별 근무기록과 공수를 확인합니다</h1>
-        <p class="hero-copy">근무일, 인력명, 실근무시간, 공수까지 한 번에 조회하고 내려받을 수 있습니다.</p>
+        <p class="eyebrow">정산</p>
+        <h1>거래처별 근무기록과 공수 확인</h1>
+        <p class="hero-copy">작업자가 입력한 근무시간을 거래처, 현장, 작업자별로 확인하고 CSV로 내려받습니다.</p>
       </div>
       <nav class="top-nav">
         <a href="main.html">메인</a>
-        <a href="assignment.html">인력배정</a>
+        <a href="assignment.html">현장 배정</a>
         <a class="ghost-btn" href="logout.html">로그아웃</a>
       </nav>
     </header>
@@ -32,11 +32,12 @@
       <section class="panel">
         <div class="panel-header">
           <div>
-            <p class="section-kicker">SETTLEMENT</p>
+            <p class="section-kicker">정산 내역</p>
             <h2>거래처별 근무일 / 근무 인력 데이터</h2>
           </div>
           <button id="exportCsvBtn" class="ghost-btn">CSV 다운로드</button>
         </div>
+        <p id="authMessage" class="auth-message"></p>
         <div class="filters">
           <label>
             거래처 필터
@@ -65,9 +66,324 @@
     </main>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="access-control.js"></script>
-  <script src="app.js?v=20260520-settlement-2"></script>
+  <script>
+    const sessionBar = document.getElementById("sessionBar");
+    const authMessage = document.getElementById("authMessage");
+    const reportClientFilter = document.getElementById("reportClientFilter");
+    const clientSummaryGrid = document.getElementById("clientSummaryGrid");
+    const reportTable = document.getElementById("reportTable");
+    const exportCsvBtn = document.getElementById("exportCsvBtn");
+
+    const state = {
+      profile: null,
+      clients: [],
+      requests: [],
+      workers: [],
+      workerProfiles: [],
+      assignments: [],
+      workLogs: []
+    };
+
+    function setMessage(message, isError = true) {
+      authMessage.textContent = message;
+      authMessage.className = isError ? "auth-message error" : "auth-message success";
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function getStoredSession() {
+      try {
+        const raw = localStorage.getItem("workforce.session");
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveStoredSession(stored, auth) {
+      const authPayload = {
+        access_token: auth.access_token,
+        refresh_token: auth.refresh_token || stored.auth.refresh_token,
+        expires_in: auth.expires_in,
+        expires_at: Math.floor(Date.now() / 1000) + Number(auth.expires_in || 0),
+        token_type: auth.token_type,
+        user: auth.user || stored.auth.user
+      };
+      const nextStored = { ...stored, auth: authPayload };
+      localStorage.setItem("workforce.session", JSON.stringify(nextStored));
+      localStorage.setItem("sb-riyxhsesprzvnvconhos-auth-token", JSON.stringify({
+        currentSession: authPayload,
+        expiresAt: authPayload.expires_at
+      }));
+      return nextStored;
+    }
+
+    async function refreshStoredSession(stored) {
+      const refreshToken = stored?.auth?.refresh_token;
+      if (!refreshToken) throw new Error("로그인이 만료되었습니다. 다시 로그인해 주세요.");
+      const response = await fetch(`${window.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: window.SUPABASE_ANON_KEY },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        localStorage.removeItem("workforce.session");
+        throw new Error(data?.message || "로그인이 만료되었습니다. 다시 로그인해 주세요.");
+      }
+      return saveStoredSession(stored, data);
+    }
+
+    async function getValidStoredSession() {
+      const stored = getStoredSession();
+      if (!stored?.auth?.access_token || !stored?.profile) {
+        throw new Error("관리자 로그인 정보가 없습니다. 다시 로그인해 주세요.");
+      }
+      const expiresAt = Number(stored.auth.expires_at || 0);
+      if (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 60) {
+        return refreshStoredSession(stored);
+      }
+      return stored;
+    }
+
+    async function supabaseRest(path, options = {}, retry = true) {
+      const stored = await getValidStoredSession();
+      const response = await fetch(`${window.SUPABASE_URL}/rest/v1/${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: window.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${stored.auth.access_token}`,
+          ...(options.headers || {})
+        }
+      });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+      if (!response.ok) {
+        const message = data?.message || data?.msg || response.statusText;
+        if (retry && /jwt expired/i.test(message)) {
+          await refreshStoredSession(stored);
+          return supabaseRest(path, options, false);
+        }
+        throw new Error(message);
+      }
+      return data;
+    }
+
+    function redirectToLogin(message) {
+      const params = new URLSearchParams({ redirect: "settlement.html", role: "admin", message });
+      window.location.href = `index.html?${params.toString()}`;
+    }
+
+    function renderSession() {
+      if (!state.profile) {
+        sessionBar.innerHTML = '<span>로그인 정보가 없습니다.</span><a class="session-link" href="index.html">로그인</a>';
+        return;
+      }
+      sessionBar.innerHTML = `
+        <span><strong>${escapeHtml(state.profile.name)}</strong> · 관리자 · ${escapeHtml(state.profile.login_id || "")}</span>
+        <span class="session-actions">
+          <a class="session-link" href="main.html">메인</a>
+          <a class="session-link" href="assignment.html">현장 배정</a>
+        </span>
+      `;
+    }
+
+    function formatDate(value) {
+      return value ? new Date(`${value}T00:00:00`).toLocaleDateString("ko-KR") : "-";
+    }
+
+    function formatDateTime(value) {
+      if (!value) return "-";
+      return new Intl.DateTimeFormat("ko-KR", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(new Date(value));
+    }
+
+    function formatHours(value) {
+      return Number(value || 0) > 0 ? `${Number(value).toFixed(1)}시간` : "-";
+    }
+
+    function formatGongsu(value) {
+      return Number(value || 0) > 0 ? Number(value).toFixed(1) : "-";
+    }
+
+    function getClient(id) {
+      return state.clients.find((item) => item.id === id);
+    }
+
+    function getRequest(id) {
+      return state.requests.find((item) => item.id === id);
+    }
+
+    function getWorker(id) {
+      const worker = state.workers.find((item) => item.id === id);
+      if (worker) return worker;
+      const profile = state.workerProfiles.find((item) => item.id === id || item.worker_id === id);
+      return profile ? { id, name: profile.name, phone: profile.phone } : null;
+    }
+
+    function getReportRows() {
+      const filterValue = reportClientFilter.value || "all";
+      return state.assignments
+        .map((assignment) => {
+          const request = getRequest(assignment.request_id);
+          const client = getClient(request?.client_id);
+          const worker = getWorker(assignment.worker_id);
+          const log = state.workLogs.find((item) => item.assignment_id === assignment.id);
+          return {
+            clientName: client?.name || "-",
+            workDate: request?.work_date || "",
+            siteLocation: request?.site_location || "-",
+            workerName: worker?.name || "-",
+            checkIn: log?.start_time || "",
+            checkOut: log?.end_time || "",
+            workHours: Number(log?.work_hours || 0),
+            gongsu: Number(log?.labor_units || 0)
+          };
+        })
+        .filter((row) => row.workHours > 0 || row.gongsu > 0 || row.checkIn || row.checkOut)
+        .filter((row) => filterValue === "all" || row.clientName === filterValue)
+        .sort((a, b) => String(a.workDate).localeCompare(String(b.workDate)) || a.clientName.localeCompare(b.clientName, "ko") || a.workerName.localeCompare(b.workerName, "ko"));
+    }
+
+    function renderClientFilter() {
+      const clientNames = [...new Set(state.requests.map((request) => getClient(request.client_id)?.name).filter(Boolean))];
+      const currentValue = reportClientFilter.value || "all";
+      reportClientFilter.innerHTML = ['<option value="all">전체 거래처</option>']
+        .concat(clientNames.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`))
+        .join("");
+      reportClientFilter.value = currentValue === "all" || clientNames.includes(currentValue) ? currentValue : "all";
+    }
+
+    function renderClientSummary() {
+      const rows = getReportRows();
+      if (rows.length === 0) {
+        clientSummaryGrid.innerHTML = '<p class="empty">거래처별 근무 요약이 아직 없습니다.</p>';
+        return;
+      }
+      const grouped = new Map();
+      rows.forEach((row) => {
+        const current = grouped.get(row.clientName) || { dates: new Set(), hours: 0, gongsu: 0 };
+        current.dates.add(row.workDate);
+        current.hours += row.workHours;
+        current.gongsu += row.gongsu;
+        grouped.set(row.clientName, current);
+      });
+      clientSummaryGrid.innerHTML = Array.from(grouped.entries())
+        .map(([clientName, item]) => `
+          <article class="summary-card">
+            <h3>${escapeHtml(clientName)}</h3>
+            <p>${item.dates.size}일 근무 기록</p>
+            <strong>${item.hours.toFixed(1)}시간 · 공수 ${item.gongsu.toFixed(1)}</strong>
+          </article>
+        `)
+        .join("");
+    }
+
+    function renderReports() {
+      const rows = getReportRows();
+      if (rows.length === 0) {
+        reportTable.innerHTML = '<tr><td colspan="8" class="empty">조회할 정산 데이터가 없습니다.</td></tr>';
+        return;
+      }
+      reportTable.innerHTML = rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.clientName)}</td>
+          <td>${formatDate(row.workDate)}</td>
+          <td>${escapeHtml(row.siteLocation)}</td>
+          <td>${escapeHtml(row.workerName)}</td>
+          <td>${formatDateTime(row.checkIn)}</td>
+          <td>${formatDateTime(row.checkOut)}</td>
+          <td>${formatHours(row.workHours)}</td>
+          <td>${formatGongsu(row.gongsu)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderAll() {
+      renderClientFilter();
+      renderClientSummary();
+      renderReports();
+    }
+
+    async function loadSettlement() {
+      const [clients, requests, workers, workerProfiles, assignments, workLogs] = await Promise.all([
+        supabaseRest("clients?select=*&order=name.asc"),
+        supabaseRest("job_requests?select=*&order=work_date.desc,created_at.desc"),
+        supabaseRest("workers?select=id,name,phone,created_at&order=name.asc"),
+        supabaseRest("profiles?select=id,role,name,phone,worker_id,login_id&role=eq.worker&order=created_at.desc"),
+        supabaseRest("assignments?select=*&order=created_at.desc"),
+        supabaseRest("work_logs?select=*&order=updated_at.desc")
+      ]);
+      state.clients = clients || [];
+      state.requests = requests || [];
+      state.workers = workers || [];
+      state.workerProfiles = workerProfiles || [];
+      state.assignments = assignments || [];
+      state.workLogs = workLogs || [];
+    }
+
+    function exportCsv() {
+      const rows = getReportRows().map((row) => [
+        row.clientName,
+        formatDate(row.workDate),
+        row.siteLocation,
+        row.workerName,
+        formatDateTime(row.checkIn),
+        formatDateTime(row.checkOut),
+        formatHours(row.workHours),
+        formatGongsu(row.gongsu)
+      ]);
+      const csv = [["거래처명", "근무일", "현장 위치", "인력명", "출근시간", "퇴근시간", "실근무시간", "공수"], ...rows]
+        .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","))
+        .join("\n");
+      const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `settlement-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function bootstrap() {
+      try {
+        const stored = await getValidStoredSession();
+        if (!window.accessControl?.canUseAdminService(stored.profile)) {
+          redirectToLogin(window.accessControl?.getAdminAccessDeniedMessage(stored.profile) || "관리자 계정으로 로그인해 주세요.");
+          return;
+        }
+        state.profile = stored.profile;
+        renderSession();
+        setMessage("정산 데이터를 불러오는 중입니다...", false);
+        await loadSettlement();
+        renderAll();
+        setMessage(getReportRows().length > 0 ? "정산 데이터를 불러왔습니다." : "근무시간이 입력된 정산 내역이 아직 없습니다.", getReportRows().length === 0);
+      } catch (error) {
+        state.profile = getStoredSession()?.profile || null;
+        renderSession();
+        reportTable.innerHTML = '<tr><td colspan="8" class="empty">정산 데이터를 불러오지 못했습니다.</td></tr>';
+        setMessage(`정산 데이터 로드 실패: ${error.message}`);
+      }
+    }
+
+    reportClientFilter.addEventListener("change", renderAll);
+    exportCsvBtn.addEventListener("click", exportCsv);
+    bootstrap();
+  </script>
 </body>
 </html>
