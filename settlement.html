@@ -111,7 +111,8 @@
     }
 
     function isClientAddressRecord(request) {
-      return request?.status === "업체정보" || request?.contact_method === "업체관리";
+      const note = String(request?.notes || "");
+      return note.includes("__CLIENT_ADDRESS_RECORD__") || request?.status === "업체정보" || request?.contact_method === "업체관리";
     }
 
     function getStoredSession() {

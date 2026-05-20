@@ -137,7 +137,7 @@
     }
 
     function buildAddressNote(address, postcode) {
-      const parts = [];
+      const parts = ["__CLIENT_ADDRESS_RECORD__"];
       if (address) parts.push(`업체주소: ${address}`);
       if (postcode) parts.push(`우편번호: ${postcode}`);
       return parts.join("\n");
@@ -286,11 +286,11 @@
         headers: { Prefer: "return=representation" },
         body: JSON.stringify({
           client_id: client.id,
-          contact_method: "업체관리",
+          contact_method: "문자",
           headcount: 1,
           site_location: address,
           work_date: today,
-          status: "업체정보",
+          status: "대기",
           notes: note,
           created_by: createdBy
         })
