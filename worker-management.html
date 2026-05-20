@@ -315,6 +315,15 @@
       return state.assignments.filter((assignment) => assignment.worker_id === workerId).length;
     }
 
+    function getProfileAssignmentWorkerIds(profile, worker) {
+      return [...new Set([worker?.id, profile?.worker_id, profile?.id].filter(Boolean))];
+    }
+
+    function getProfileAssignments(profile, worker) {
+      const workerIds = new Set(getProfileAssignmentWorkerIds(profile, worker));
+      return state.assignments.filter((assignment) => workerIds.has(assignment.worker_id));
+    }
+
     function getLinkedProfileCount(workerId, exceptProfileId = "") {
       if (!workerId) return 0;
       return state.workerProfiles.filter((profile) => profile.worker_id === workerId && profile.id !== exceptProfileId).length;
@@ -579,7 +588,8 @@
       if (!profile) return;
 
       const worker = findWorkerByProfile(profile);
-      const assignmentCount = worker?.id ? getAssignmentCount(worker.id) : 0;
+      const profileAssignments = getProfileAssignments(profile, worker);
+      const assignmentCount = profileAssignments.length;
       const linkedProfileCount = worker?.id ? getLinkedProfileCount(worker.id, profile.id) : 0;
       const canDeleteWorkerRecord = !!worker?.id && profile.worker_id === worker.id && assignmentCount === 0 && linkedProfileCount === 0;
 
@@ -596,6 +606,19 @@
 
       try {
         setMessage("작업자 계정을 삭제하는 중입니다...", false);
+        if (profileAssignments.length > 0) {
+          const assignmentIds = profileAssignments.map((assignment) => assignment.id).filter(Boolean);
+          const encodedAssignmentIds = assignmentIds.map(encodeURIComponent).join(",");
+          await supabaseRest(`work_logs?assignment_id=in.(${encodedAssignmentIds})`, {
+            method: "DELETE",
+            headers: { Prefer: "return=minimal" }
+          });
+          await supabaseRest(`assignments?id=in.(${encodedAssignmentIds})`, {
+            method: "DELETE",
+            headers: { Prefer: "return=minimal" }
+          });
+        }
+
         await supabaseRest(`profiles?id=eq.${profile.id}`, {
           method: "DELETE",
           headers: { Prefer: "return=minimal" }
