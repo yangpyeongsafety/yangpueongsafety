@@ -590,18 +590,37 @@
     }
     async function saveAssignmentsSequentially(requestId, selectedWorkers, createdBy) {
       for (const selectedWorker of selectedWorkers) {
+        let lastError = null;
         const worker = await resolveAssignmentWorker(selectedWorker);
         try {
           await insertAssignmentRow(requestId, worker.id, createdBy);
+          continue;
         } catch (error) {
           if (!isWorkerForeignKeyError(error)) throw error;
+          lastError = error;
+        }
+        try {
           const repaired = await createWorkerRecord({
             ...selectedWorker,
             rawName: selectedWorker.rawName || worker.name,
             rawPhone: selectedWorker.rawPhone || worker.phone
           });
           await insertAssignmentRow(requestId, repaired.id, createdBy);
+          continue;
+        } catch (error) {
+          if (!isWorkerForeignKeyError(error)) throw error;
+          lastError = error;
         }
+        if (selectedWorker.profileId) {
+          try {
+            await insertAssignmentRow(requestId, selectedWorker.profileId, createdBy);
+            continue;
+          } catch (error) {
+            if (!isWorkerForeignKeyError(error)) throw error;
+            lastError = error;
+          }
+        }
+        throw lastError || new Error('배정할 인력 정보를 연결하지 못했습니다.');
       }
     }
     async function handleRequestSubmit(event) {
