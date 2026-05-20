@@ -191,7 +191,7 @@
     }
     function formatAssignmentClient(assignment) {
       const request = getRequest(assignment.request_id);
-      return getClient(request?.client_id)?.name || '업체명 확인 필요';
+      return getClient(request?.client_id)?.name || '업체 미확인';
     }
     function formatAssignmentTitle(assignment) {
       const request = getRequest(assignment.request_id);
